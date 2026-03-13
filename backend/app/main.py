@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from app.config import get_settings
+from app.auth.router import router as auth_router
+
 
 settings = get_settings()
 
@@ -15,6 +17,7 @@ app.add_middleware(
     https_only=not settings.debug,  # Require HTTPS in production
 )
 
+app.include_router(auth_router, prefix='/api')
 
 @app.get("/health")
 async def health_check():

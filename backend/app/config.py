@@ -13,6 +13,10 @@ class Settings(BaseSettings):
 
     # --- Security & Auth ---
     secret_key: SecretStr = SecretStr("dev-secret-key-change-in-production")
+    access_token_expire_minutes: int = 60  # Access tokens (60 minutes)
+    refresh_token_expire_minutes: int = (
+        60 * 24 * 30
+    ) # Long-lived refresh tokens (30 days)
     
     # Google auth
     google_client_id: Optional[str] = None
