@@ -42,6 +42,15 @@ async def find_or_create_user(
     return user
 
 
+async def logout_user(db: AsyncSession, user_id: str) -> None:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user:
+        user.refresh_token = None
+        await db.commit()
+
+
 async def store_refresh_token(db: AsyncSession, user_id: str, token: str) -> None:
     """Store a refresh token on the user."""
     result = await db.execute(select(User).where(User.id == user_id))

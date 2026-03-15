@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import get_db
 from app.auth.oauth import oauth
-from app.auth.service import find_or_create_user, store_refresh_token, get_user_by_refresh_token
+from app.auth.service import find_or_create_user, store_refresh_token, get_user_by_refresh_token, logout_user
 from app.auth.jwt_handler import create_access_token, verify_access_token, generate_refresh_token
 from app.schemas.users import AuthResponse, UserResponse, RefreshRequest
 from app.db.models import User
@@ -83,6 +83,25 @@ async def refresh_tokens(
         refresh_token=new_refresh_token,
         user=UserResponse.model_validate(user)
     )
+
+@router.post('/logout')
+async def logout(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Not authenticated')
+    
+    token = auth_header.split(' ')[1]
+    user_id = verify_access_token(token)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail='Invalid or expired token')
+    
+    await logout_user(db, user_id)
+    return {'message' : 'Logged out successfully'}
+
 
 
 @router.get('/me')
