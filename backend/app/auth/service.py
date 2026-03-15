@@ -29,7 +29,6 @@ async def find_or_create_user(
         return user
     
     user = User(
-        id=str(uuid.uuid4()),
         google_id=google_id,
         email=email,
         name=name,

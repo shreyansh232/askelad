@@ -3,6 +3,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.auth.router import router as auth_router
+from app.api.v1.projects import router as projects_router
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix='/api')
+app.include_router(projects_router, prefix='/api')
 
 @app.get("/health")
 async def health_check():
