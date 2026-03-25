@@ -67,7 +67,7 @@ async def auth_callback(
             value=access_token,
             httponly=True,
             secure=not settings.debug,
-            samesite="lax",
+            samesite="none" if not settings.debug else "lax",
             max_age=settings.access_token_expire_minutes * 60,
             path="/"
         )
@@ -77,7 +77,7 @@ async def auth_callback(
             value=refresh_token,
             httponly=True,
             secure=not settings.debug,
-            samesite="lax",
+            samesite="none" if not settings.debug else "lax",
             max_age=60 * 60 * 24 * 30,
             path="/"
         )
@@ -112,7 +112,7 @@ async def refresh_tokens(
         value=new_access_token,
         httponly=True,
         secure=not settings.debug,
-        samesite='lax',
+        samesite="none" if not settings.debug else "lax",
         max_age=settings.access_token_expire_minutes * 60,
         path='/'
     )
@@ -121,7 +121,7 @@ async def refresh_tokens(
         value=new_refresh_token,
         httponly=True,
         secure=not settings.debug,
-        samesite='lax',
+        samesite="none" if not settings.debug else "lax",
         max_age=60 * 60 * 24 * 30,
         path='/'
     )
