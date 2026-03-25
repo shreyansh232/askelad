@@ -18,6 +18,11 @@ router = APIRouter(prefix='/auth', tags=['Authentication'])
 
 @router.get('/login')
 async def login(request: Request):
+    frontend_base = settings.frontend_url
+    
+    # Store it in session so it survives the redirect to Google and back
+    request.session["frontend_base"] = frontend_base
+
     redirect_uri = settings.google_redirect_uri
 
     return await oauth.google.authorize_redirect(request, redirect_uri)
