@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     # Google auth
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
-    google_redirect_uri: str = "http://localhost:8000/auth/callback"
+    google_redirect_uri: str = "http://localhost:8000/api/auth/callback"
+    frontend_url: str = "http://localhost:3000"
 
     # --- Database ---
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/askelad"

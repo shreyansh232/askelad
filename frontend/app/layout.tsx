@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 
 import SmoothScroll from "@/components/SmoothScroll";
+import Providers from "./providers";
 
 import "./globals.css";
 
@@ -27,7 +28,9 @@ export default function RootLayout({
         className={`${jetbrainsMono.variable} antialiased`}
       >
         <SmoothScroll />
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
