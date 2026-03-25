@@ -66,9 +66,9 @@ async def auth_callback(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=False,          # Change to True in production (HTTPS)
-            samesite="lax",        # or "strict" if you prefer
-            max_age=settings.access_token_expire_minutes * 60,   # convert minutes → seconds
+            secure=not settings.debug,
+            samesite="lax",
+            max_age=settings.access_token_expire_minutes * 60,
             path="/"
         )
 
@@ -76,9 +76,9 @@ async def auth_callback(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=False,
+            secure=not settings.debug,
             samesite="lax",
-            max_age=60 * 60 * 24 * 30,  # longer-lived
+            max_age=60 * 60 * 24 * 30,
             path="/"
         )
 
@@ -111,16 +111,16 @@ async def refresh_tokens(
         key='access_token',
         value=new_access_token,
         httponly=True,
-        secure=False,
+        secure=not settings.debug,
         samesite='lax',
-        max_age=settings.access_token_expire_minutes,
+        max_age=settings.access_token_expire_minutes * 60,
         path='/'
     )
     response.set_cookie(
         key='refresh_token',
         value=new_refresh_token,
         httponly=True,
-        secure=False,
+        secure=not settings.debug,
         samesite='lax',
         max_age=60 * 60 * 24 * 30,
         path='/'
