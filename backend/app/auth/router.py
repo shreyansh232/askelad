@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.db.models import User
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/auth', tags=['Authentication'])
 
@@ -50,44 +53,49 @@ async def auth_callback(
             detail='Failed to get user info from Google'
         )
     
-    user = await find_or_create_user(
-        db=db,
-        google_id=userinfo['sub'],
-        email=userinfo['email'],
-        name=userinfo.get('name'),
-        picture_url=userinfo.get('picture')
-    )
-
-
-    access_token = create_access_token(user_id=user.id)
-    refresh_token = generate_refresh_token()
-
-    # Store refresh token in DB
-    await store_refresh_token(db, user.id, refresh_token)
-
-    response = RedirectResponse(url=f"{frontend_base}/auth/callback", status_code=302)
-
-    response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=not settings.debug,
-            samesite="none" if not settings.debug else "lax",
-            max_age=settings.access_token_expire_minutes * 60,
-            path="/"
+    try:
+        user = await find_or_create_user(
+            db=db,
+            google_id=userinfo['sub'],
+            email=userinfo['email'],
+            name=userinfo.get('name'),
+            picture_url=userinfo.get('picture')
         )
 
-    response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=not settings.debug,
-            samesite="none" if not settings.debug else "lax",
-            max_age=60 * 60 * 24 * 30,
-            path="/"
-        )
+        access_token = create_access_token(user_id=user.id)
+        refresh_token = generate_refresh_token()
 
-    return response
+        await store_refresh_token(db, user.id, refresh_token)
+
+        response = RedirectResponse(url=f"{frontend_base}/auth/callback", status_code=302)
+
+        response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=not settings.debug,
+                samesite="none" if not settings.debug else "lax",
+                max_age=settings.access_token_expire_minutes * 60,
+                path="/"
+            )
+
+        response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                httponly=True,
+                secure=not settings.debug,
+                samesite="none" if not settings.debug else "lax",
+                max_age=60 * 60 * 24 * 30,
+                path="/"
+            )
+
+        return response
+    except Exception:
+        logger.exception("Google auth callback failed after token exchange")
+        return RedirectResponse(
+            url=f"{frontend_base}/auth/callback?error=auth_callback_failed",
+            status_code=302,
+        )
 
 
 @router.post('/refresh')
