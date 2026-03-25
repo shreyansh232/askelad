@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.requests import Request
@@ -9,7 +10,7 @@ from app.api.deps import get_db
 from app.auth.oauth import oauth
 from app.auth.service import find_or_create_user, store_refresh_token, get_user_by_refresh_token, logout_user
 from app.auth.jwt_handler import create_access_token, verify_access_token, generate_refresh_token
-from app.schemas.users import UserResponse
+from app.schemas.users import AuthResponse, RefreshRequest, UserResponse
 from fastapi.responses import JSONResponse
 from app.db.models import User
 from app.config import get_settings
@@ -18,6 +19,23 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/auth', tags=['Authentication'])
+
+
+def _get_bearer_token(request: Request) -> str | None:
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        return auth_header.split(' ', 1)[1]
+
+    return request.cookies.get('access_token')
+
+
+def _to_user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        picture_url=user.picture_url,
+    )
 
 @router.get('/login')
 async def login(request: Request):
@@ -67,29 +85,13 @@ async def auth_callback(
 
         await store_refresh_token(db, user.id, refresh_token)
 
-        response = RedirectResponse(url=f"{frontend_base}/auth/callback", status_code=302)
-
-        response.set_cookie(
-                key="access_token",
-                value=access_token,
-                httponly=True,
-                secure=not settings.debug,
-                samesite="none" if not settings.debug else "lax",
-                max_age=settings.access_token_expire_minutes * 60,
-                path="/"
-            )
-
-        response.set_cookie(
-                key="refresh_token",
-                value=refresh_token,
-                httponly=True,
-                secure=not settings.debug,
-                samesite="none" if not settings.debug else "lax",
-                max_age=60 * 60 * 24 * 30,
-                path="/"
-            )
-
-        return response
+        fragment = urlencode(
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+            }
+        )
+        return RedirectResponse(url=f"{frontend_base}/auth/callback#{fragment}", status_code=302)
     except Exception:
         logger.exception("Google auth callback failed after token exchange")
         return RedirectResponse(
@@ -101,51 +103,37 @@ async def auth_callback(
 @router.post('/refresh')
 async def refresh_tokens(
     request: Request,
+    body: RefreshRequest | None = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """Read refresh_token from cookie, rotate tokens, set new cookies."""
-    old_refresh_token = request.cookies.get('refresh_token')
+    old_refresh_token = body.refresh_token if body else None
+    if not old_refresh_token:
+        old_refresh_token = request.cookies.get('refresh_token')
 
     if not old_refresh_token:
-        raise HTTPException(status_code=401, detail='No refresh token cookie')
+        raise HTTPException(status_code=401, detail='No refresh token provided')
 
     user = await get_user_by_refresh_token(db, old_refresh_token)
 
     if not user:
         raise HTTPException(status_code=401, detail='Invalid or expired refresh token')
 
-    # Rotate: issue new tokens and invalidate the old refresh token
     new_access_token = create_access_token(user_id=user.id)
     new_refresh_token = generate_refresh_token()
     await store_refresh_token(db, user.id, new_refresh_token)
 
-    response = JSONResponse(content={'message': 'Tokens refreshed'})
-    response.set_cookie(
-        key='access_token',
-        value=new_access_token,
-        httponly=True,
-        secure=not settings.debug,
-        samesite="none" if not settings.debug else "lax",
-        max_age=settings.access_token_expire_minutes * 60,
-        path='/'
+    return AuthResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        user=_to_user_response(user),
     )
-    response.set_cookie(
-        key='refresh_token',
-        value=new_refresh_token,
-        httponly=True,
-        secure=not settings.debug,
-        samesite="none" if not settings.debug else "lax",
-        max_age=60 * 60 * 24 * 30,
-        path='/'
-    )
-    return response
 
 @router.post('/logout')
 async def logout(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    token = request.cookies.get('access_token')
+    token = _get_bearer_token(request)
     if not token:
         raise HTTPException(status_code=401, detail='Not authenticated')
 
@@ -156,16 +144,13 @@ async def logout(
 
     await logout_user(db, user_id)
 
-    response = JSONResponse(content={'message': 'Logged out successfully'})
-    response.delete_cookie('access_token', path='/')
-    response.delete_cookie('refresh_token', path='/')
-    return response
+    return JSONResponse(content={'message': 'Logged out successfully'})
 
 
 
 @router.get('/me')
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    token = request.cookies.get('access_token')
+    token = _get_bearer_token(request)
 
     if not token:
         raise HTTPException(status_code=401, detail='Not authenticated')

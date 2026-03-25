@@ -1,4 +1,23 @@
+import { clearAuthTokens, getAccessToken, getRefreshToken, storeAuthTokens } from './token-storage';
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
+interface RefreshResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+function buildHeaders(headers?: HeadersInit): Headers {
+  const merged = new Headers(headers);
+  merged.set('Content-Type', 'application/json');
+
+  const accessToken = getAccessToken();
+  if (accessToken && !merged.has('Authorization')) {
+    merged.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  return merged;
+}
 
 /**
  * Central fetch wrapper. Sends cookies automatically.
@@ -18,11 +37,7 @@ export async function apiFetch<T>(
 
   const response = await fetch(url, {
     ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: buildHeaders(options.headers),
   });
 
   // ─── HANDLE 401 ──────────────────────────────────────────────────────────
@@ -34,21 +49,26 @@ export async function apiFetch<T>(
     }
 
     // Otherwise, try to silently refresh the access token.
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      clearAuthTokens();
+      throw new Error('Session expired');
+    }
+
     const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (refreshResponse.ok) {
+      const refreshPayload = (await refreshResponse.json()) as RefreshResponse;
+      storeAuthTokens(refreshPayload.access_token, refreshPayload.refresh_token);
+
       // Refresh worked — retry the original request once.
       const retryResponse = await fetch(url, {
         ...options,
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers: buildHeaders(options.headers),
       });
 
       if (!retryResponse.ok) {
@@ -59,6 +79,7 @@ export async function apiFetch<T>(
 
     // Refresh also failed → session is dead. Throw (don't redirect).
     // The calling component can decide what to do (show login, etc.).
+    clearAuthTokens();
     throw new Error('Session expired');
   }
 

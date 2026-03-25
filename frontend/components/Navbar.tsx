@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUpRight, LogOut, User as UserIcon } from 'lucide-react';
+import { ArrowUpRight, LogOut } from 'lucide-react';
 import Image from 'next/image';
 
 import { Button } from '@/components/ui/button';

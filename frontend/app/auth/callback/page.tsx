@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { persistAuthTokensFromFragment } from '@/lib/auth';
+
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,8 +21,14 @@ function CallbackHandler() {
       return;
     }
 
-    // Success — cookies were already set by the backend redirect.
-    // Navigate to the main app.
+    const stored = persistAuthTokensFromFragment(window.location.hash);
+    if (!stored) {
+      setTimeout(() => {
+        router.replace('/');
+      }, 1500);
+      return;
+    }
+
     router.replace('/');
   }, [router, searchParams]);
 
