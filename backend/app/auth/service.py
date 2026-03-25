@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
@@ -13,10 +14,18 @@ async def find_or_create_user(
     name: str | None = None,
     picture_url: str | None = None
 ) -> User:
-    result = await db.execute(select(User).where(User.google_id == google_id))
+    result = await db.execute(
+        select(User).where(
+            or_(
+                User.google_id == google_id,
+                User.email == email,
+            )
+        )
+    )
     user = result.scalar_one_or_none()
 
     if user:
+        user.google_id = google_id
         user.email = email
 
         if name is not None:
@@ -36,7 +45,30 @@ async def find_or_create_user(
     )
 
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(
+            select(User).where(
+                or_(
+                    User.google_id == google_id,
+                    User.email == email,
+                )
+            )
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise
+
+        user.google_id = google_id
+        user.email = email
+        if name is not None:
+            user.name = name
+        if picture_url is not None:
+            user.picture_url = picture_url
+        await db.commit()
+
     await db.refresh(user)
     return user
 
@@ -65,5 +97,4 @@ async def get_user_by_refresh_token(db: AsyncSession, token: str) -> User | None
     result = await db.execute(select(User).where(User.refresh_token == token))
     user = result.scalar_one_or_none()
     return user
-
 
