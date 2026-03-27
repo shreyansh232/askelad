@@ -4,8 +4,12 @@ import { ArrowRight } from "lucide-react";
 
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Landing() {
+  const { isLoggedIn } = useAuth();
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0">
@@ -38,10 +42,12 @@ export default function Landing() {
           </p>
 
           <div className="mt-12 flex flex-col items-center gap-4 sm:flex-row">
+            <Link href={isLoggedIn ? "/project" : "/login"}>
             <Button className="h-14 rounded-[1.15rem] bg-primary px-8 text-base font-medium text-primary-foreground shadow-none hover:bg-primary/92">
-              Get started free
+              {isLoggedIn ? "Open workspace" : "Get started free"}
               <ArrowRight className="size-4" />
             </Button>
+            </Link>
           </div>
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-foreground/48">

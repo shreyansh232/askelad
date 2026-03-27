@@ -14,9 +14,9 @@ function CallbackHandler() {
     const error = searchParams.get('error');
 
     if (error) {
-      // Brief delay so the user sees the error, then send back to landing
+      // Brief delay so the user sees the error, then send back to login
       setTimeout(() => {
-        router.replace('/');
+        router.replace('/login');
       }, 2500);
       return;
     }
@@ -24,12 +24,12 @@ function CallbackHandler() {
     const stored = persistAuthTokensFromFragment(window.location.hash);
     if (!stored) {
       setTimeout(() => {
-        router.replace('/');
+        router.replace('/login');
       }, 1500);
       return;
     }
 
-    router.replace('/');
+    router.replace('/project');
   }, [router, searchParams]);
 
   const error = searchParams.get('error');

@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUpRight, LogOut } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
-import { getLoginUrl } from '@/lib/auth';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Navbar() {
@@ -23,10 +23,6 @@ export default function Navbar() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
-
-  function handleLogin() {
-    window.location.href = getLoginUrl();
-  }
 
   return (
     <header className="fixed top-8 left-1/2 z-50 -translate-x-1/2">
@@ -71,7 +67,7 @@ export default function Navbar() {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
-                className="flex items-center rounded-full ring-2 ring-transparent transition-all hover:ring-foreground/20 focus-visible:outline-none focus-visible:ring-foreground/40"
+                className="hover:cursor-pointer flex items-center rounded-full ring-2 ring-transparent transition-all hover:ring-foreground/20 focus-visible:outline-none focus-visible:ring-foreground/40"
               >
                 {user.picture_url ? (
                   <Image
@@ -121,12 +117,12 @@ export default function Navbar() {
           ) : (
             // Not logged in: show Login button
             <Button
-              onClick={handleLogin}
+              asChild
               variant="default"
               size="sm"
               className="h-11 rounded-[1.15rem] bg-foreground px-6 text-xs font-medium text-background shadow-none hover:bg-foreground/90"
             >
-              Login
+              <Link href="/login">Login</Link>
             </Button>
           )}
         </div>

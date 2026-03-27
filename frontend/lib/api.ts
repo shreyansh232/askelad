@@ -74,6 +74,9 @@ export async function apiFetch<T>(
       if (!retryResponse.ok) {
         throw new Error(`API error: ${retryResponse.status}`);
       }
+      if (retryResponse.status === 204) {
+        return undefined as T;
+      }
       return retryResponse.json() as Promise<T>;
     }
 
@@ -87,6 +90,10 @@ export async function apiFetch<T>(
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || `API error: ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return response.json() as Promise<T>;
