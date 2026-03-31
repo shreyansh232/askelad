@@ -7,9 +7,13 @@ interface RefreshResponse {
   refresh_token: string;
 }
 
-function buildHeaders(headers?: HeadersInit): Headers {
+function buildHeaders(headers?: HeadersInit, body?: BodyInit | null): Headers {
   const merged = new Headers(headers);
-  merged.set('Content-Type', 'application/json');
+  
+  // Only set application/json if not FormData
+  if (!(body instanceof FormData)) {
+    merged.set('Content-Type', 'application/json');
+  }
 
   const accessToken = getAccessToken();
   if (accessToken && !merged.has('Authorization')) {
@@ -37,7 +41,7 @@ export async function apiFetch<T>(
 
   const response = await fetch(url, {
     ...options,
-    headers: buildHeaders(options.headers),
+    headers: buildHeaders(options.headers, options.body),
   });
 
   // ─── HANDLE 401 ──────────────────────────────────────────────────────────
@@ -68,7 +72,7 @@ export async function apiFetch<T>(
       // Refresh worked — retry the original request once.
       const retryResponse = await fetch(url, {
         ...options,
-        headers: buildHeaders(options.headers),
+        headers: buildHeaders(options.headers, options.body),
       });
 
       if (!retryResponse.ok) {

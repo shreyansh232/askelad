@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
@@ -11,6 +12,7 @@ from app.services.projects import (
     update_project,
     delete_project,
 )
+from app.services.documents import document_service
 
 
 router = APIRouter(prefix='/projects', tags=['Projects'])
@@ -18,17 +20,53 @@ router = APIRouter(prefix='/projects', tags=['Projects'])
 
 @router.post('/', response_model=ProjectResponse, status_code=201)
 async def create_new_project(
-    body: ProjectCreate,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    industry: Optional[str] = Form(None),
+    files: List[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 1. Create project record (flushes, but doesn't commit yet)
     project = await create_project(
         db=db,
         user_id=current_user.id,
-        name=body.name,
-        description=body.description,
-        industry=body.industry,
+        name=name,
+        description=description,
+        industry=industry,
     )
+
+    # 2. Index project metadata for RAG (Side effect: Pinecone)
+    try:
+        await document_service.index_project_metadata(
+            project_id=project.id,
+            name=name,
+            industry=industry or "General",
+            description=description or ""
+        )
+    except Exception as e:
+        # Log error but don't fail the whole request
+        print(f"Error indexing metadata to Pinecone: {e}")
+
+    # 3. Handle file uploads if any
+    if files:
+        for file in files:
+            try:
+                content = await file.read()
+                await document_service.upload_and_index(
+                    db=db,
+                    project_id=project.id,
+                    file_content=content,
+                    filename=file.filename
+                )
+            except Exception as e:
+                # Log file-specific error
+                print(f"Error indexing file {file.filename}: {e}")
+    
+    # Final Commit for all DB changes (Project + Documents)
+    await db.commit()
+    await db.refresh(project)
+
     return ProjectResponse.model_validate(project)
 
 

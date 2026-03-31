@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/callback"
     frontend_url: str = "http://localhost:3000"
 
+    # --- Pinecone ---
+    pinecone_api_key: Optional[SecretStr] = None
+    pinecone_index_name: str = "askelad"
+
+    # --- Supabase Storage (For free PDF hosting) ---
+    supabase_url: Optional[str] = None
+    supabase_service_key: Optional[SecretStr] = None
+    supabase_bucket: str = "PDFs"
+
+    # --- OpenAI (for embeddings) ---
+    openai_api_key: Optional[SecretStr] = None
+
     # --- Database ---
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/askelad"
 
@@ -43,4 +55,9 @@ def get_settings() -> Settings:
     (and read the .env file) only once. Subsequent calls return the same object,
     which improves performance.
     """
-    return Settings()
+    settings = Settings()
+    if settings.debug:
+        print(f"DEBUG: Pinecone API Key Loaded: {'Yes' if settings.pinecone_api_key else 'No'}")
+        print(f"DEBUG: OpenAI API Key Loaded: {'Yes' if settings.openai_api_key else 'No'}")
+        print(f"DEBUG: Supabase URL Loaded: {'Yes' if settings.supabase_url else 'No'}")
+    return settings

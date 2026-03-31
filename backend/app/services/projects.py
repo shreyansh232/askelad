@@ -14,7 +14,7 @@ async def create_project(db: AsyncSession, user_id: str, name: str, description:
         )
 
     db.add(project)
-    await db.commit()
+    await db.flush() # Use flush instead of commit to get the ID without ending the transaction
     await db.refresh(project)
     return project
 
