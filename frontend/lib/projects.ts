@@ -37,11 +37,19 @@ export interface ProjectUpdatePayload {
 // ─── API calls ───────────────────────────────────────────────────────────────
 
 export async function createProject(payload: ProjectCreatePayload | FormData): Promise<Project> {
-  const isFormData = payload instanceof FormData;
+  let body: FormData;
+  if (payload instanceof FormData) {
+    body = payload;
+  } else {
+    body = new FormData();
+    body.append('name', payload.name);
+    if (payload.description) body.append('description', payload.description);
+    if (payload.industry) body.append('industry', payload.industry);
+  }
   
   return apiFetch<Project>('/projects/', {
     method: 'POST',
-    body: isFormData ? payload : JSON.stringify(payload),
+    body,
   });
 }
 

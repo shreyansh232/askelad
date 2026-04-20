@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
 from app.db.models import User
-from app.schemas.projects import ProjectCreate, ProjectUpdate, ProjectResponse
+from app.schemas.projects import ProjectResponse, ProjectUpdate
 from app.services.projects import (
     create_project,
     get_project,

@@ -7,7 +7,7 @@ interface RefreshResponse {
   refresh_token: string;
 }
 
-function buildHeaders(headers?: HeadersInit, body?: BodyInit | null): Headers {
+export function buildHeaders(headers?: HeadersInit, body?: BodyInit | null): Headers {
   const merged = new Headers(headers);
   
   // Only set application/json if not FormData

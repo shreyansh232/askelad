@@ -1,5 +1,3 @@
-import uuid
-
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,4 +95,3 @@ async def get_user_by_refresh_token(db: AsyncSession, token: str) -> User | None
     result = await db.execute(select(User).where(User.refresh_token == token))
     user = result.scalar_one_or_none()
     return user
-

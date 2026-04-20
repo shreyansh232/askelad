@@ -1,6 +1,8 @@
 from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.models import Project
 
 
@@ -25,6 +27,17 @@ async def get_project(db: AsyncSession, project_id: str) -> Optional[Project]:
     project = result.scalar_one_or_none()
 
     return project
+
+
+async def get_project_for_user(
+    db: AsyncSession,
+    project_id: str,
+    user_id: str,
+) -> Optional[Project]:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def get_user_projects(db: AsyncSession, user_id: str) -> list[Project]:

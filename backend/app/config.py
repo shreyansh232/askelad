@@ -1,7 +1,11 @@
+import logging
 from functools import lru_cache
 from typing import Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -16,8 +20,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60  # Access tokens (60 minutes)
     refresh_token_expire_minutes: int = (
         60 * 24 * 30
-    ) # Long-lived refresh tokens (30 days)
-    
+    )  # Long-lived refresh tokens (30 days)
+
     # Google auth
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
@@ -33,8 +37,18 @@ class Settings(BaseSettings):
     supabase_service_key: Optional[SecretStr] = None
     supabase_bucket: str = "PDFs"
 
+    # --- Tavily (for web search) ---
+    tavily_api_key: Optional[SecretStr] = None
+
     # --- OpenAI (for embeddings) ---
     openai_api_key: Optional[SecretStr] = None
+
+    # --- LLM Runtime ---
+    llm_model: str = "gpt-5.4-mini"
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 2400
+    agent_context_document_limit: int = 5
+    agent_excerpt_length: int = 2000
 
     # --- Database ---
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/askelad"
@@ -57,7 +71,13 @@ def get_settings() -> Settings:
     """
     settings = Settings()
     if settings.debug:
-        print(f"DEBUG: Pinecone API Key Loaded: {'Yes' if settings.pinecone_api_key else 'No'}")
-        print(f"DEBUG: OpenAI API Key Loaded: {'Yes' if settings.openai_api_key else 'No'}")
-        print(f"DEBUG: Supabase URL Loaded: {'Yes' if settings.supabase_url else 'No'}")
+        logger.debug(
+            "Pinecone API Key Loaded: %s", "Yes" if settings.pinecone_api_key else "No"
+        )
+        logger.debug(
+            "OpenAI API Key Loaded: %s", "Yes" if settings.openai_api_key else "No"
+        )
+        logger.debug(
+            "Supabase URL Loaded: %s", "Yes" if settings.supabase_url else "No"
+        )
     return settings

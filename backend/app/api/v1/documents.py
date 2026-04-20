@@ -1,75 +1,84 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+import logging
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_db, get_current_user
-from app.db.models import User, Project
+from app.config import get_settings
+from app.db.models import User
+from app.schemas.documents import DocumentResponse
 from app.services.documents import document_service
-from sqlalchemy import select
+from app.services.projects import get_project_for_user
 
-# Use a more specific prefix and handle routing carefully
-router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
-async def get_project_for_user(project_id: str, user: User, db: AsyncSession) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
-    )
-    project = result.scalar_one_or_none()
+
+router = APIRouter(prefix='/projects/{project_id}/documents', tags=['Documents'])
+
+DbSession = Annotated[AsyncSession, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def _get_owned_project(project_id: str, user: User, db: AsyncSession):
+    project = await get_project_for_user(db=db, project_id=project_id, user_id=user.id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail='Project not found')
     return project
 
-@router.post("")
-@router.post("/")
+
+@router.post('', response_model=DocumentResponse, status_code=201)
 async def upload_document(
     project_id: str,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Verify project ownership
-    await get_project_for_user(project_id, current_user, db)
-    
+    file: Annotated[UploadFile, File(...)],
+    db: DbSession,
+    current_user: CurrentUser,
+) -> DocumentResponse:
+    await _get_owned_project(project_id, current_user, db)
     content = await file.read()
     try:
         doc = await document_service.upload_and_index(
             db=db,
             project_id=project_id,
             file_content=content,
-            filename=file.filename
+            filename=file.filename,
         )
-        # Commit DB addition (project.py handles commit for onboarding, but this is a direct upload)
         await db.commit()
         await db.refresh(doc)
-        return doc
-    except Exception as e:
+        return DocumentResponse.model_validate(doc)
+    except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        # Best-effort: remove the file from Supabase if it was already uploaded
+        # before the DB commit failed, to avoid orphaned storage objects.
+        if document_service.supabase and file.filename:
+            try:
+                path = f'{project_id}/{file.filename}'
+                document_service.supabase.storage.from_(settings.supabase_bucket).remove([path])
+            except Exception:
+                logger.warning('Orphan cleanup failed for %s/%s', project_id, file.filename)
+        raise HTTPException(status_code=500, detail=str(exc))
 
-@router.get("")
-@router.get("/")
+
+@router.get('', response_model=list[DocumentResponse])
 async def list_documents(
     project_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Verify project ownership
-    await get_project_for_user(project_id, current_user, db)
-    
+    db: DbSession,
+    current_user: CurrentUser,
+) -> list[DocumentResponse]:
+    await _get_owned_project(project_id, current_user, db)
     docs = await document_service.get_project_documents(db, project_id)
-    return docs
+    return [DocumentResponse.model_validate(doc) for doc in docs]
 
-@router.delete("/{document_id}")
+
+@router.delete('/{document_id}', status_code=204)
 async def delete_document(
     project_id: str,
     document_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: DbSession,
+    current_user: CurrentUser,
 ):
-    # Verify project ownership
-    await get_project_for_user(project_id, current_user, db)
-    
+    await _get_owned_project(project_id, current_user, db)
     success = await document_service.delete_document(db, document_id, project_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    return {"status": "deleted"}
+        raise HTTPException(status_code=404, detail='Document not found')
