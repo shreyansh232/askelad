@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     plan_limit_premium: int = 50
     plan_limit_admin: int = -1
 
+    # --- Cofounder cross-agent awareness ---
+    # Number of recent messages (per agent) to include in the Cofounder's digest.
+    # Set to 0 to disable cross-agent context entirely.
+    cofounder_cross_agent_messages: int = 3
+
     # --- Database ---
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/askelad"
 

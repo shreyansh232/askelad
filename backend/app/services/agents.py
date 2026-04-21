@@ -684,6 +684,16 @@ class AgentService:
             raise RuntimeError("User message missing for run")
 
         context, context_documents = await self._build_context(db, project)
+
+        # When the Cofounder runs, inject a digest of what every other agent
+        # has been doing so it has full situational awareness.
+        if agent_type == 'cofounder' and settings.cofounder_cross_agent_messages > 0:
+            cross_agent_digest = await self._build_cross_agent_digest(
+                db, project.id
+            )
+            if cross_agent_digest:
+                context = context + '\n\n' + cross_agent_digest
+
         if on_stream_event:
             await on_stream_event(
                 {
@@ -854,6 +864,73 @@ class AgentService:
         if clarification:
             await db.refresh(clarification)
         return run, assistant_message, clarification
+
+    async def _build_cross_agent_digest(
+        self,
+        db: AsyncSession,
+        project_id: str,
+    ) -> str:
+        """
+        Build a structured digest of recent activity from all non-cofounder agents.
+
+        Called exclusively when the Cofounder agent is running so it has
+        situational awareness of what Finance, Marketing, and Product have
+        been advising the founder.
+
+        Format example:
+          ## Agent Activity Digest (last 3 exchanges per agent)
+          ### Finance Agent
+          [User] What's my runway based on current burn?
+          [Finance] Your runway is approx 8 months...
+          ...
+        """
+        limit = settings.cofounder_cross_agent_messages
+        other_agents: list[AgentType] = ['finance', 'marketing', 'product']
+
+        sections: list[str] = []
+
+        for agent_type in other_agents:
+            # Find the thread for this agent in this project (may not exist yet).
+            thread = await self._get_thread(db, project_id, agent_type)
+            if not thread:
+                continue  # Agent hasn't been used yet — skip silently.
+
+            # Fetch the most recent `limit * 2` messages (user + assistant pairs).
+            # We order desc to get the latest, then reverse for chronological display.
+            result = await db.execute(
+                select(AgentMessage)
+                .where(AgentMessage.thread_id == thread.id)
+                .order_by(AgentMessage.created_at.desc())
+                .limit(limit * 2)  # Grab pairs (user + assistant per exchange)
+            )
+            raw_messages: list[AgentMessage] = list(result.scalars().all())
+
+            if not raw_messages:
+                continue
+
+            # Reverse so they read oldest → newest.
+            raw_messages.reverse()
+
+            label = agent_type.capitalize()
+            lines: list[str] = [f'### {label} Agent']
+            for msg in raw_messages:
+                role_label = 'Founder' if msg.role == 'user' else label
+                # Truncate very long assistant answers to keep token count sane.
+                content = msg.content
+                if len(content) > 600:
+                    content = content[:600] + '… [truncated]'
+                lines.append(f'[{role_label}] {content}')
+
+            sections.append('\n'.join(lines))
+
+        if not sections:
+            return ''
+
+        header = (
+            f'## Agent Activity Digest '
+            f'(last {limit} exchange(s) per agent — use this to synthesise cross-functional advice)'
+        )
+        return header + '\n\n' + '\n\n'.join(sections)
 
     async def _build_context(
         self, db: AsyncSession, project: Project
