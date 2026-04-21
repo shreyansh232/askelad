@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.config import get_settings
 from app.auth.router import router as auth_router
 from app.api.v1.agents import router as agents_router
@@ -11,7 +14,28 @@ from fastapi.middleware.cors import CORSMiddleware
 
 settings = get_settings()
 
+# Initialize rate limiter - uses IP address by default
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI()
+
+# Add rate limiter to app state for access in routes
+app.state.limiter = limiter
+
+
+def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Custom handler for rate limit exceeded errors."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Rate limit exceeded. Please try again later.",
+            "retry_after": exc.detail,
+        },
+    )
+
+
+# Add rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

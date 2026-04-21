@@ -21,8 +21,10 @@ First principles:
 import json
 from typing import Annotated, AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
@@ -51,6 +53,9 @@ router = APIRouter(prefix="/projects/{project_id}", tags=["Agents"])
 # We can write: async def foo(db: DbSession)
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+# Rate limiter instance - uses request object to get client IP
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _encode_sse(event: str, data: dict) -> str:
@@ -93,7 +98,9 @@ async def _get_owned_project(
     response_model=AgentMessageCreateResponse,
     status_code=201,
 )
+@limiter.limit("10/minute")  # Rate limit: 10 messages per minute per IP
 async def create_agent_message(
+    request: Request,
     project_id: str,
     agent_type: AgentType,
     body: AgentMessageCreate,
@@ -168,7 +175,9 @@ async def list_agent_messages(
 
 
 @router.get("/agents/{agent_type}/stream")
+@limiter.limit("30/minute")  # Rate limit: 30 streams per minute per IP
 async def stream_agent_run(
+    request: Request,
     project_id: str,
     agent_type: AgentType,
     run_id: Annotated[str, Query(min_length=1)],  # Required query param
