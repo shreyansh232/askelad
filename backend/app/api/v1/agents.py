@@ -25,10 +25,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.db.models import User
+from app.config import get_settings
+from app.db.models import AgentMessage, AgentThread, User
 from app.schemas.agents import (
     AgentHistoryResponse,
     AgentMessageCreate,
@@ -56,6 +58,16 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 # Rate limiter instance - uses request object to get client IP
 limiter = Limiter(key_func=get_remote_address)
+
+# App settings (plan limits etc.)
+_settings = get_settings()
+
+# Plan → message limit per agent mapping.  -1 means unlimited.
+_PLAN_LIMITS: dict[str, int] = {
+    'free': _settings.plan_limit_free,
+    'premium': _settings.plan_limit_premium,
+    'admin': _settings.plan_limit_admin,
+}
 
 
 def _encode_sse(event: str, data: dict) -> str:
@@ -112,8 +124,9 @@ async def create_agent_message(
 
     What happens:
     1. Validate project ownership
-    2. Create run + user message in database
-    3. Return immediately with run ID (LLM runs asynchronously via streaming)
+    2. Enforce plan-based per-agent prompt limit
+    3. Create run + user message in database
+    4. Return immediately with run ID (LLM runs asynchronously via streaming)
 
     The actual LLM processing happens when client calls /stream endpoint.
 
@@ -123,6 +136,37 @@ async def create_agent_message(
     """
     # Security: check user owns this project
     project = await _get_owned_project(db, current_user, project_id)
+
+    # ── Plan-limit enforcement ───────────────────────────────────────────────
+    user_plan = current_user.user_type.value  # 'free' | 'premium' | 'admin'
+    limit = _PLAN_LIMITS.get(user_plan, _settings.plan_limit_free)
+
+    if limit != -1:
+        # Count user messages sent in THIS project's thread for this agent type
+        stmt = (
+            select(func.count())
+            .select_from(AgentMessage)
+            .join(AgentThread, AgentMessage.thread_id == AgentThread.id)
+            .where(
+                AgentThread.project_id == project.id,
+                AgentThread.agent_type == agent_type,
+                AgentMessage.role == 'user',
+            )
+        )
+        result = await db.execute(stmt)
+        used = result.scalar_one()
+
+        if used >= limit:
+            plan_display = user_plan.capitalize()
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"You have reached your {plan_display} plan limit of "
+                    f"{limit} prompt(s) per agent. "
+                    "Upgrade to Premium for more messages."
+                ),
+            )
+    # ── End plan-limit enforcement ───────────────────────────────────────────
 
     # Delegate to service - creates run + message in DB
     run, user_message = await agent_service.create_message_run(

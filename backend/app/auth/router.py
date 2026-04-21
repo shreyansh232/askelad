@@ -35,6 +35,7 @@ def _to_user_response(user: User) -> UserResponse:
         email=user.email,
         name=user.name,
         picture_url=user.picture_url,
+        user_type=user.user_type.value,
     )
 
 @router.get('/login')

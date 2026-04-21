@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     agent_context_document_limit: int = 5
     agent_excerpt_length: int = 2000
 
+    # --- Plan-based prompt limits (messages per user per agent) ---
+    # -1 = unlimited (admin)
+    plan_limit_free: int = 1
+    plan_limit_premium: int = 50
+    plan_limit_admin: int = -1
+
     # --- Database ---
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/askelad"
 

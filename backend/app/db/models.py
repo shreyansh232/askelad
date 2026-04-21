@@ -1,12 +1,21 @@
+import enum
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
+
+
+class UserType(str, enum.Enum):
+    """Plan tiers for users. Controls per-agent prompt limits."""
+
+    free = 'free'
+    premium = 'premium'
+    admin = 'admin'
 
 
 class User(Base):
@@ -16,6 +25,14 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     name: Mapped[Optional[str]] = mapped_column(String(255))
     picture_url: Mapped[Optional[str]] = mapped_column(Text)
+
+    user_type: Mapped[UserType] = mapped_column(
+        Enum(UserType, name='user_type_enum', create_type=True),
+        nullable=False,
+        default=UserType.free,
+        server_default=UserType.free.value,
+        index=True,
+    )
 
     google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True)
 

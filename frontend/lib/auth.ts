@@ -3,11 +3,14 @@ import { clearAuthTokens, getAccessToken, storeAuthTokens } from './token-storag
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 // Mirrors backend's UserResponse (schemas/users.py)
+export type UserType = 'free' | 'premium' | 'admin';
+
 export interface User {
   id: string;
   email: string;
   name: string | null;
   picture_url: string | null;
+  user_type: UserType;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
