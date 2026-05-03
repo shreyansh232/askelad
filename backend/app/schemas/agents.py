@@ -3,15 +3,20 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.documents import DocumentResponse
 
-AgentType = Literal['cofounder', 'finance', 'marketing', 'product']
-AgentRunStatus = Literal['pending', 'running', 'completed', 'needs_clarification', 'failed']
-ClarificationStatus = Literal['open', 'resolved']
-AgentMessageRole = Literal['user', 'assistant']
+
+AgentType = Literal["cofounder", "finance", "marketing", "product"]
+AgentRunStatus = Literal[
+    "pending", "running", "completed", "needs_clarification", "failed"
+]
+ClarificationStatus = Literal["open", "resolved"]
+AgentMessageRole = Literal["user", "assistant"]
 
 
 class AgentMessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 class AgentMessageResponse(BaseModel):
@@ -20,9 +25,10 @@ class AgentMessageResponse(BaseModel):
     role: AgentMessageRole
     content: str
     citations: list[str] = Field(default_factory=list)
+    attachments: list[DocumentResponse] = Field(default_factory=list)
     created_at: datetime
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}
 
 
 class ClarificationRequestResponse(BaseModel):
@@ -36,7 +42,7 @@ class ClarificationRequestResponse(BaseModel):
     created_at: datetime
     resolved_at: datetime | None
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}
 
 
 class ClarificationResolutionRequest(BaseModel):
@@ -54,7 +60,7 @@ class AgentRunResponse(BaseModel):
     updated_at: datetime
     completed_at: datetime | None
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}
 
 
 class AgentMessageCreateResponse(BaseModel):

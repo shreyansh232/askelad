@@ -7,12 +7,24 @@ export type AgentRunStatus = 'pending' | 'running' | 'completed' | 'needs_clarif
 export type ClarificationStatus = 'open' | 'resolved';
 export type AgentMessageRole = 'user' | 'assistant';
 
+// Document type for attachments
+export interface Document {
+  id: string;
+  project_id: string;
+  filename: string;
+  file_type: string;
+  storage_url: string;
+  excerpt: string | null;
+  created_at: string;
+}
+
 export interface AgentMessage {
   id: string;
   run_id: string | null;
   role: AgentMessageRole;
   content: string;
   citations: string[];
+  attachments: Document[];
   created_at: string;
 }
 
@@ -73,11 +85,12 @@ export interface AgentStreamEvent {
 export async function createAgentMessage(
   projectId: string,
   agentType: AgentType,
-  content: string
+  content: string,
+  attachmentIds: string[] = []
 ): Promise<AgentMessageCreateResponse> {
   return apiFetch<AgentMessageCreateResponse>(`/projects/${projectId}/agents/${agentType}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, attachment_ids: attachmentIds }),
   });
 }
 

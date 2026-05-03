@@ -41,13 +41,13 @@ class DocumentService:
             self.embeddings = OpenAIEmbeddings(
                 openai_api_key=settings.openai_api_key.get_secret_value(),
                 model="text-embedding-3-large",
-                dimensions=1024 # Match user's Pinecone index dimension
+                dimensions=1024,  # Match user's Pinecone index dimension
             )
         else:
             self.embeddings = None
 
     def build_excerpt(self, text: str) -> str | None:
-        cleaned = ' '.join(text.split())
+        cleaned = " ".join(text.split())
         if not cleaned:
             return None
         return cleaned[: settings.agent_excerpt_length]
@@ -62,34 +62,42 @@ class DocumentService:
         )
         return list(result.scalars().all())
 
-    async def index_project_metadata(self, project_id: str, name: str, industry: str, description: str):
+    async def index_project_metadata(
+        self, project_id: str, name: str, industry: str, description: str
+    ):
         """Indexes the core project details as a primary context block."""
         if not (self.pinecone and self.embeddings):
             logger.info(
-                'Skipping metadata indexing for project %s because Pinecone or embeddings are unavailable',
+                "Skipping metadata indexing for project %s because Pinecone or embeddings are unavailable",
                 project_id,
             )
             return
 
         text = f"Project Name: {name}\nIndustry: {industry}\nDescription: {description}"
-        logger.info('Indexing project metadata for %s', project_id)
-        
+        logger.info("Indexing project metadata for %s", project_id)
+
         vector_store = PineconeVectorStore(
             index_name=settings.pinecone_index_name,
             embedding=self.embeddings,
             namespace=project_id,
-            pinecone_api_key=settings.pinecone_api_key.get_secret_value()
+            pinecone_api_key=settings.pinecone_api_key.get_secret_value(),
         )
-        
+
         await asyncio.to_thread(
             vector_store.add_texts,
             texts=[text],
-            metadatas=[{'type': 'project_metadata', 'project_id': project_id}],
+            metadatas=[{"type": "project_metadata", "project_id": project_id}],
         )
 
-    async def delete_document(self, db: AsyncSession, document_id: str, project_id: str):
+    async def delete_document(
+        self, db: AsyncSession, document_id: str, project_id: str
+    ):
         # 1. Get document from DB
-        result = await db.execute(select(Document).where(Document.id == document_id, Document.project_id == project_id))
+        result = await db.execute(
+            select(Document).where(
+                Document.id == document_id, Document.project_id == project_id
+            )
+        )
         doc = result.scalar_one_or_none()
         if not doc:
             return False
@@ -100,7 +108,9 @@ class DocumentService:
                 index = self.pinecone.Index(settings.pinecone_index_name)
                 index.delete(ids=[doc.vector_id], namespace=project_id)
             except Exception:
-                logger.exception('Failed deleting document %s from Pinecone', document_id)
+                logger.exception(
+                    "Failed deleting document %s from Pinecone", document_id
+                )
 
         # 3. Delete from Supabase
         if self.supabase:
@@ -108,7 +118,9 @@ class DocumentService:
                 path = f"{project_id}/{doc.filename}"
                 self.supabase.storage.from_(settings.supabase_bucket).remove([path])
             except Exception:
-                logger.exception('Failed deleting document %s from Supabase', document_id)
+                logger.exception(
+                    "Failed deleting document %s from Supabase", document_id
+                )
 
         # 4. Delete from DB
         await db.delete(doc)
@@ -121,10 +133,30 @@ class DocumentService:
         if not self.supabase:
             raise Exception("Supabase not configured")
 
-        content_type = "application/pdf" if filename.endswith(".pdf") else "text/plain"
+        # Determine content type based on file extension
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+        if ext == "pdf":
+            content_type = "application/pdf"
+        elif ext in ("txt", "md", "text"):
+            content_type = "text/plain"
+        elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            # Images
+            content_type_map = {
+                "png": "image/png",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "gif": "image/gif",
+                "webp": "image/webp",
+            }
+            content_type = content_type_map.get(ext, "application/octet-stream")
+        else:
+            content_type = "application/octet-stream"
+
         path = f"{project_id}/{filename}"
-        
-        logger.info('Uploading %s to Supabase storage for project %s', filename, project_id)
+
+        logger.info(
+            "Uploading %s to Supabase storage for project %s", filename, project_id
+        )
         # Note: supabase-py's storage upload is synchronous
         self.supabase.storage.from_(settings.supabase_bucket).upload(
             path=path,
@@ -137,8 +169,13 @@ class DocumentService:
         ).get_public_url(path)
 
         text = ""
+        is_image = content_type.startswith("image/")
 
-        if filename.endswith(".pdf"):
+        # Only extract text from PDFs and text files - skip images
+        if is_image:
+            # Images are stored but not indexed in Pinecone
+            text = ""
+        elif filename.endswith(".pdf"):
             reader = PdfReader(io.BytesIO(file_content))
             for page in reader.pages:
                 text += page.extract_text() + "\n"
@@ -149,24 +186,31 @@ class DocumentService:
         excerpt = self.build_excerpt(text)
 
         if self.pinecone and self.embeddings and text.strip():
-            logger.info('Indexing %s in Pinecone namespace %s', filename, project_id)
+            logger.info("Indexing %s in Pinecone namespace %s", filename, project_id)
             index_name = settings.pinecone_index_name
             vector_store = PineconeVectorStore(
-                index_name=index_name, 
-                embedding=self.embeddings, 
+                index_name=index_name,
+                embedding=self.embeddings,
                 namespace=project_id,
-                pinecone_api_key=settings.pinecone_api_key.get_secret_value()
+                pinecone_api_key=settings.pinecone_api_key.get_secret_value(),
             )
 
+            file_type_metadata = "image" if is_image else "document"
             ids = await asyncio.to_thread(
                 vector_store.add_texts,
                 texts=[text],
-                metadatas=[{'filename': filename, 'project_id': project_id, 'type': 'document'}],
+                metadatas=[
+                    {
+                        "filename": filename,
+                        "project_id": project_id,
+                        "type": file_type_metadata,
+                    }
+                ],
             )
             vector_id = ids[0] if ids else None
         else:
             logger.info(
-                'Skipping Pinecone indexing for %s. pinecone=%s embeddings=%s text_length=%s',
+                "Skipping Pinecone indexing for %s. pinecone=%s embeddings=%s text_length=%s",
                 filename,
                 bool(self.pinecone),
                 bool(self.embeddings),

@@ -125,11 +125,13 @@ async def get_project_or_404(db: AsyncSession, project_id: int) -> Project:
 
 ### TypeScript (Frontend)
 
+- NEVER LET THE LINES OF CODE GO OVER 500. ALWAYS CREATE A COMPONENT AND IMPORT IT.
 - Strict mode enabled
 - Functional components + interfaces (no `React.FC`)
 - Prefer `const` / immutable patterns
 - Use Tailwind + shadcn/ui components
 - Descriptive tuple query keys including projectId + agentType
+- A button should always have a cursor pointer on hover.
 
 ```tsx
 interface ChatMessageProps {

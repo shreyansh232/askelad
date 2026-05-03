@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.config import get_settings
-from app.db.models import AgentMessage, AgentThread, User
+from app.db.models import AgentMessage, AgentThread, Document, User
 from app.schemas.agents import (
     AgentHistoryResponse,
     AgentMessageCreate,
@@ -42,6 +42,7 @@ from app.schemas.agents import (
     ClarificationRequestResponse,
     ClarificationResolutionRequest,
 )
+from app.schemas.documents import DocumentResponse
 from app.services.agents import agent_service
 from app.services.projects import get_project_for_user
 
@@ -64,9 +65,9 @@ _settings = get_settings()
 
 # Plan → message limit per agent mapping.  -1 means unlimited.
 _PLAN_LIMITS: dict[str, int] = {
-    'free': _settings.plan_limit_free,
-    'premium': _settings.plan_limit_premium,
-    'admin': _settings.plan_limit_admin,
+    "free": _settings.plan_limit_free,
+    "premium": _settings.plan_limit_premium,
+    "admin": _settings.plan_limit_admin,
 }
 
 
@@ -150,7 +151,7 @@ async def create_agent_message(
             .where(
                 AgentThread.project_id == project.id,
                 AgentThread.agent_type == agent_type,
-                AgentMessage.role == 'user',
+                AgentMessage.role == "user",
             )
         )
         result = await db.execute(stmt)
@@ -174,6 +175,7 @@ async def create_agent_message(
         project=project,
         agent_type=agent_type,
         content=body.content,
+        attachment_ids=body.attachment_ids,
     )
 
     # Return created objects as response (Pydantic handles serialization)
@@ -181,6 +183,18 @@ async def create_agent_message(
         run=AgentRunResponse.model_validate(run),
         user_message=AgentMessageResponse.model_validate(user_message),
     )
+
+
+async def _load_message_attachments(
+    db: AsyncSession, message: AgentMessage
+) -> list[Document]:
+    """Load attached documents for a message."""
+    if not message.attachment_ids:
+        return []
+    result = await db.execute(
+        select(Document).where(Document.id.in_(message.attachment_ids))
+    )
+    return list(result.scalars().all())
 
 
 @router.get("/agents/{agent_type}/messages", response_model=AgentHistoryResponse)
@@ -207,10 +221,28 @@ async def list_agent_messages(
     thread_id, messages = await agent_service.list_messages(db, project_id, agent_type)
     clarifications = await agent_service.list_clarifications(db, project_id, agent_type)
 
+    # Load attachments for each message
+    message_responses = []
+    for message in messages:
+        attachments = await _load_message_attachments(db, message)
+        message_responses.append(
+            AgentMessageResponse(
+                id=message.id,
+                run_id=message.run_id,
+                role=message.role,
+                content=message.content,
+                citations=message.citations,
+                attachments=[
+                    DocumentResponse.model_validate(doc) for doc in attachments
+                ],
+                created_at=message.created_at,
+            )
+        )
+
     return AgentHistoryResponse(
         thread_id=thread_id or "",
         agent_type=agent_type,
-        messages=[AgentMessageResponse.model_validate(message) for message in messages],
+        messages=message_responses,
         clarifications=[
             ClarificationRequestResponse.model_validate(clarification)
             for clarification in clarifications

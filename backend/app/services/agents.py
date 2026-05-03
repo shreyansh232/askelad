@@ -359,6 +359,7 @@ class AgentService:
         project: Project,
         agent_type: AgentType,
         content: str,
+        attachment_ids: list[str] | None = None,
     ) -> tuple[AgentRun, AgentMessage]:
         """
         Create a new "run" for an agent when user sends a message.
@@ -403,6 +404,7 @@ class AgentService:
             role="user",
             content=content.strip(),
             citations=[],  # User messages don't have citations initially
+            attachment_ids=attachment_ids or [],  # Store attachment document IDs
         )
         db.add(user_message)
         await db.commit()  # Commit both run and message to database
@@ -687,12 +689,10 @@ class AgentService:
 
         # When the Cofounder runs, inject a digest of what every other agent
         # has been doing so it has full situational awareness.
-        if agent_type == 'cofounder' and settings.cofounder_cross_agent_messages > 0:
-            cross_agent_digest = await self._build_cross_agent_digest(
-                db, project.id
-            )
+        if agent_type == "cofounder" and settings.cofounder_cross_agent_messages > 0:
+            cross_agent_digest = await self._build_cross_agent_digest(db, project.id)
             if cross_agent_digest:
-                context = context + '\n\n' + cross_agent_digest
+                context = context + "\n\n" + cross_agent_digest
 
         if on_stream_event:
             await on_stream_event(
@@ -885,7 +885,7 @@ class AgentService:
           ...
         """
         limit = settings.cofounder_cross_agent_messages
-        other_agents: list[AgentType] = ['finance', 'marketing', 'product']
+        other_agents: list[AgentType] = ["finance", "marketing", "product"]
 
         sections: list[str] = []
 
@@ -912,25 +912,25 @@ class AgentService:
             raw_messages.reverse()
 
             label = agent_type.capitalize()
-            lines: list[str] = [f'### {label} Agent']
+            lines: list[str] = [f"### {label} Agent"]
             for msg in raw_messages:
-                role_label = 'Founder' if msg.role == 'user' else label
+                role_label = "Founder" if msg.role == "user" else label
                 # Truncate very long assistant answers to keep token count sane.
                 content = msg.content
                 if len(content) > 600:
-                    content = content[:600] + '… [truncated]'
-                lines.append(f'[{role_label}] {content}')
+                    content = content[:600] + "… [truncated]"
+                lines.append(f"[{role_label}] {content}")
 
-            sections.append('\n'.join(lines))
+            sections.append("\n".join(lines))
 
         if not sections:
-            return ''
+            return ""
 
         header = (
-            f'## Agent Activity Digest '
-            f'(last {limit} exchange(s) per agent — use this to synthesise cross-functional advice)'
+            f"## Agent Activity Digest "
+            f"(last {limit} exchange(s) per agent — use this to synthesise cross-functional advice)"
         )
-        return header + '\n\n' + '\n\n'.join(sections)
+        return header + "\n\n" + "\n\n".join(sections)
 
     async def _build_context(
         self, db: AsyncSession, project: Project

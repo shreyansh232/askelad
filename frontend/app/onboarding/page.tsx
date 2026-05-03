@@ -1,42 +1,44 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Loader2, Upload, X } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, Loader2, Upload, X } from "lucide-react";
 
-import { useAuth } from '@/hooks/useAuth';
-import { createProject, listProjects } from '@/lib/projects';
-import { Button } from '@/components/ui/button';
+import { useAuth } from "@/hooks/useAuth";
+import { createProject, listProjects } from "@/lib/projects";
+import { Button } from "@/components/ui/button";
 
 const INDUSTRIES = [
-  'SaaS / Software',
-  'Fintech',
-  'E-commerce',
-  'Healthcare',
-  'EdTech',
-  'Marketing & Media',
-  'Developer Tools',
-  'AI / ML',
-  'Logistics',
-  'Consumer',
-  'Other',
+  "SaaS / Software",
+  "Fintech",
+  "E-commerce",
+  "Healthcare",
+  "EdTech",
+  "Marketing & Media",
+  "Developer Tools",
+  "AI / ML",
+  "Logistics",
+  "Consumer",
+  "Other",
 ] as const;
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const isNewProject = searchParams.get("new") === "1";
   const { isLoading, isLoggedIn } = useAuth();
   const { data: projects, isLoading: projectsLoading } = useQuery({
-    queryKey: ['projects', 'list'],
+    queryKey: ["projects", "list"],
     queryFn: listProjects,
     enabled: isLoggedIn,
   });
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [industry, setIndustry] = useState('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [industry, setIndustry] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,17 +57,17 @@ export default function OnboardingPage() {
   // Redirect unauthenticated users to login
   useEffect(() => {
     if (!isLoading && !isLoggedIn) {
-      router.replace('/login');
+      router.replace("/login");
     }
   }, [isLoading, isLoggedIn, router]);
 
   const existingProject = useMemo(() => projects?.[0] ?? null, [projects]);
 
   useEffect(() => {
-    if (!isLoading && !projectsLoading && existingProject) {
-      router.replace('/project');
+    if (!isLoading && !projectsLoading && existingProject && !isNewProject) {
+      router.replace("/project");
     }
-  }, [existingProject, isLoading, projectsLoading, router]);
+  }, [existingProject, isLoading, isNewProject, projectsLoading, router]);
 
   if (isLoading || (isLoggedIn && projectsLoading)) {
     return (
@@ -84,19 +86,23 @@ export default function OnboardingPage() {
 
     try {
       const formData = new FormData();
-      formData.append('name', name.trim());
-      if (description.trim()) formData.append('description', description.trim());
-      if (industry) formData.append('industry', industry);
-      
+      formData.append("name", name.trim());
+      if (description.trim())
+        formData.append("description", description.trim());
+      if (industry) formData.append("industry", industry);
+
       files.forEach((file) => {
-        formData.append('files', file);
+        formData.append("files", file);
       });
 
       const project = await createProject(formData);
-      queryClient.setQueryData(['projects', 'list'], [project]);
-      router.push('/project');
+      queryClient.setQueryData(["projects", "list"], (old: unknown[]) => [
+        ...(old ?? []),
+        project,
+      ]);
+      router.push("/project");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(err instanceof Error ? err.message : "Something went wrong.");
       setSubmitting(false);
     }
   }
@@ -116,9 +122,6 @@ export default function OnboardingPage() {
 
       <main className="relative flex min-h-screen flex-col items-center justify-center px-6 py-20">
         {/* Eyebrow */}
-        <p className="text-[10px] tracking-[0.32em] text-foreground/30 uppercase mb-5">
-          Step 1 of 1
-        </p>
 
         <h1 className="font-mono text-[clamp(1.8rem,3.5vw,2.6rem)] leading-tight tracking-[-0.04em] text-foreground text-center max-w-[18ch]">
           Tell us about your startup
@@ -199,7 +202,10 @@ export default function OnboardingPage() {
           {/* Documents Upload */}
           <div className="mt-5">
             <label className="block text-[10px] tracking-[0.2em] text-foreground/40 uppercase mb-2">
-              Context Documents <span className="text-[9px] lowercase opacity-60">(optional)</span>
+              Context Documents{" "}
+              <span className="text-[9px] lowercase opacity-60">
+                (optional)
+              </span>
             </label>
             <div className="relative">
               <input
@@ -215,16 +221,25 @@ export default function OnboardingPage() {
                 className="flex cursor-pointer items-center justify-center gap-2 rounded-[0.75rem] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 transition-colors hover:border-white/20 hover:bg-white/[0.04]"
               >
                 <Upload className="size-4 text-foreground/40" />
-                <span className="text-sm text-foreground/50">Upload pitch deck, business plan...</span>
+                <span className="text-sm text-foreground/50">
+                  Upload pitch deck, business plan...
+                </span>
               </label>
             </div>
-            
+
             {files.length > 0 && (
               <div className="mt-3 space-y-2">
                 {files.map((file, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-[0.5rem] bg-white/[0.04] px-3 py-2 text-xs text-foreground/70">
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-[0.5rem] bg-white/[0.04] px-3 py-2 text-xs text-foreground/70"
+                  >
                     <span className="truncate max-w-[200px]">{file.name}</span>
-                    <button type="button" onClick={() => removeFile(i)} className="text-foreground/30 hover:text-red-400">
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="text-foreground/30 hover:text-red-400"
+                    >
                       <X className="size-3" />
                     </button>
                   </div>
@@ -237,9 +252,7 @@ export default function OnboardingPage() {
           </div>
 
           {/* Error */}
-          {error && (
-            <p className="mt-4 text-xs text-red-400/80">{error}</p>
-          )}
+          {error && <p className="mt-4 text-xs text-red-400/80">{error}</p>}
 
           {/* Submit */}
           <Button
@@ -263,5 +276,19 @@ export default function OnboardingPage() {
         </p>
       </main>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="size-5 animate-spin text-foreground/40" />
+        </div>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
   );
 }
