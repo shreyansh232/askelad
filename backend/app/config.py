@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     openai_api_key: Optional[SecretStr] = None
 
-    llm_model: str = "gpt-4.4-mini"
+    llm_model: str = "gpt-5.4-mini"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 2400
     agent_context_document_limit: int = 5
