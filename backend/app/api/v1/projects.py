@@ -1,8 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+
+limiter = Limiter(key_func=get_remote_address)
 from app.db.models import User
 from app.schemas.projects import ProjectResponse, ProjectUpdate
 from app.services.projects import (
@@ -19,7 +23,9 @@ router = APIRouter(prefix='/projects', tags=['Projects'])
 
 
 @router.post('/', response_model=ProjectResponse, status_code=201)
+@limiter.limit("5/minute")
 async def create_new_project(
+    request: Request,
     name: str = Form(...),
     description: Optional[str] = Form(None),
     industry: Optional[str] = Form(None),

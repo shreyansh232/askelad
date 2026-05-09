@@ -1,9 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+
+limiter = Limiter(key_func=get_remote_address)
 from app.db.models import User
 from app.schemas.settings import (
     ProviderKeyResponse,
@@ -79,7 +83,9 @@ async def delete_provider_key(
     "/provider-keys/{provider}/test",
     response_model=ProviderKeyTestResponse,
 )
+@limiter.limit("5/minute")
 async def test_provider_key(
+    request: Request,
     provider: ProviderName,
     body: ProviderKeyTestRequest,
     db: DbSession,

@@ -1,10 +1,14 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+
+limiter = Limiter(key_func=get_remote_address)
 from app.config import get_settings
 from app.db.models import User
 from app.schemas.documents import DocumentResponse
@@ -29,7 +33,9 @@ async def _get_owned_project(project_id: str, user: User, db: AsyncSession):
 
 
 @router.post('', response_model=DocumentResponse, status_code=201)
+@limiter.limit("5/minute")
 async def upload_document(
+    request: Request,
     project_id: str,
     file: Annotated[UploadFile, File(...)],
     db: DbSession,

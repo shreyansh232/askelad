@@ -6,27 +6,30 @@ from app.config import get_settings
 
 settings = get_settings()
 
+
 def _normalize_asyncpg_url(database_url: str) -> str:
     url = make_url(database_url)
-    sslmode = url.query.get('sslmode')
+    sslmode = url.query.get("sslmode")
 
     if not sslmode:
         return database_url
 
     query = dict(url.query)
-    query.pop('sslmode', None)
-    query['ssl'] = sslmode
+    query.pop("sslmode", None)
+    query["ssl"] = sslmode
     return str(url.set(query=query))
 
 
-engine: AsyncEngine = create_async_engine(_normalize_asyncpg_url(settings.database_url))
+engine: AsyncEngine = create_async_engine(
+    _normalize_asyncpg_url(settings.database_url),
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 
 AsyncSessionLocal = async_sessionmaker(
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-    bind=engine
+    expire_on_commit=False, autocommit=False, autoflush=False, bind=engine
 )
+
 
 class Base(DeclarativeBase):
     pass
