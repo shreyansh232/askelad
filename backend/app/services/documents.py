@@ -1,6 +1,8 @@
 import asyncio
 import io
 import logging
+import re
+import unicodedata
 from typing import List, Optional
 
 from supabase import create_client, Client
@@ -17,6 +19,58 @@ from app.db.models import Document
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitize a filename for safe storage in Supabase/object stores.
+
+    Object stores are strict about:
+    - Path separators (/ \) — removed
+    - Special characters — removed or replaced
+    - Unicode normalization — ensures consistent encoding
+    - Leading/trailing dots — removed (hidden files on Unix)
+    - Multiple consecutive dots — collapsed
+
+    Returns a safe, URL-safe filename preserving the original extension.
+    """
+    # Separate name and extension
+    if "." in filename:
+        name, ext = filename.rsplit(".", 1)
+        ext = ext.lower()
+    else:
+        name, ext = filename, ""
+
+    # Unicode normalization (NFKD) — decompose characters
+    name = unicodedata.normalize("NFKD", name)
+    ext = unicodedata.normalize("NFKD", ext)
+
+    # Encode to ASCII, dropping non-ASCII chars (emoji, accents, etc.)
+    name = name.encode("ascii", "ignore").decode("ascii")
+    ext = ext.encode("ascii", "ignore").decode("ascii")
+
+    # Remove path separators and other dangerous chars
+    name = re.sub(r"[/\\ :<>|*?\"]", "", name)
+    ext = re.sub(r"[/\\ :<>|*?\"]", "", ext)
+
+    # Remove leading/trailing dots and whitespace
+    name = name.strip(". ")
+    ext = ext.strip(". ")
+
+    # Collapse multiple dots/spaces into single underscore
+    name = re.sub(r"[\s.]{2,}", "_", name)
+
+    # Replace remaining spaces with underscores
+    name = name.replace(" ", "_")
+
+    # Fallback if everything was stripped
+    if not name:
+        name = "file"
+
+    # Rebuild filename
+    if ext:
+        return f"{name}.{ext}"
+    return name
 
 
 class DocumentService:
@@ -133,8 +187,11 @@ class DocumentService:
         if not self.supabase:
             raise Exception("Supabase not configured")
 
-        # Determine content type based on file extension
-        ext = filename.lower().split(".")[-1] if "." in filename else ""
+        safe_filename = _sanitize_filename(filename)
+
+        # Re-detect content type after sanitization (extension may have changed)
+        ext = safe_filename.lower().rsplit(".", 1)[-1] if "." in safe_filename else ""
+
         if ext == "pdf":
             content_type = "application/pdf"
         elif ext in ("txt", "md", "text"):
@@ -152,10 +209,13 @@ class DocumentService:
         else:
             content_type = "application/octet-stream"
 
-        path = f"{project_id}/{filename}"
+        path = f"{project_id}/{safe_filename}"
 
         logger.info(
-            "Uploading %s to Supabase storage for project %s", filename, project_id
+            "Uploading %s (sanitized from: %s) to Supabase storage for project %s",
+            safe_filename,
+            filename,
+            project_id,
         )
         # Note: supabase-py's storage upload is synchronous
         self.supabase.storage.from_(settings.supabase_bucket).upload(
@@ -175,7 +235,7 @@ class DocumentService:
         if is_image:
             # Images are stored but not indexed in Pinecone
             text = ""
-        elif filename.endswith(".pdf"):
+        elif safe_filename.endswith(".pdf"):
             reader = PdfReader(io.BytesIO(file_content))
             for page in reader.pages:
                 text += page.extract_text() + "\n"
@@ -186,7 +246,7 @@ class DocumentService:
         excerpt = self.build_excerpt(text)
 
         if self.pinecone and self.embeddings and text.strip():
-            logger.info("Indexing %s in Pinecone namespace %s", filename, project_id)
+            logger.info("Indexing %s in Pinecone namespace %s", safe_filename, project_id)
             index_name = settings.pinecone_index_name
             vector_store = PineconeVectorStore(
                 index_name=index_name,
@@ -201,7 +261,7 @@ class DocumentService:
                 texts=[text],
                 metadatas=[
                     {
-                        "filename": filename,
+                        "filename": safe_filename,
                         "project_id": project_id,
                         "type": file_type_metadata,
                     }
@@ -211,7 +271,7 @@ class DocumentService:
         else:
             logger.info(
                 "Skipping Pinecone indexing for %s. pinecone=%s embeddings=%s text_length=%s",
-                filename,
+                safe_filename,
                 bool(self.pinecone),
                 bool(self.embeddings),
                 len(text.strip()),
@@ -219,7 +279,7 @@ class DocumentService:
 
         new_doc = Document(
             project_id=project_id,
-            filename=filename,
+            filename=safe_filename,  # Store sanitized filename to match storage
             file_type=content_type,
             storage_url=storage_url,
             excerpt=excerpt,
