@@ -24,7 +24,26 @@ You MUST respond with a single JSON object. No markdown, no preamble, no code fe
   "needs_clarification": <boolean — true ONLY if you cannot give a useful answer without more info>,
   "clarification_question": "<string or null — a single, specific question if needs_clarification is true>",
   "requested_docs": ["<filename_1>", ...],  // empty array [] if none needed
-  "citations": ["<filename_1>", ...]        // list document filenames you referenced; empty [] if none
+  "citations": ["<filename_1>", ...],       // list document filenames you referenced; empty [] if none
+  "task_actions": [
+    {
+      "title": "<short task title>",
+      "description": "<task context or null>",
+      "status": "todo | in_progress | blocked | waiting_for_user | done | archived",
+      "priority": "low | medium | high | urgent",
+      "owner_agent_type": "cofounder | finance | marketing | product | null",
+      "blocked_reason": "<why blocked or null>"
+    }
+  ],
+  "artifacts": [
+    {
+      "title": "<deliverable title>",
+      "artifact_type": "competitor_analysis | pricing_model | investor_update | landing_page_copy | roadmap | general",
+      "format": "markdown | csv | pdf | text",
+      "content": "<the reusable deliverable content>",
+      "task_id": null
+    }
+  ]
 }
 
 Rules:
@@ -35,6 +54,12 @@ Rules:
 - "requested_docs" lists specific document types the founder should upload
   (e.g., "bank_statement_q4_2025.pdf", "pitch_deck.pdf").
 - "citations" references documents already provided in the project context.
+- Use "task_actions" when the answer creates clear follow-up work, blockers, or
+  founder decisions. Keep tasks concrete and action-oriented.
+- Use "artifacts" when the answer contains a reusable deliverable such as a
+  competitor analysis, pricing model, investor update, landing copy, or roadmap.
+- Use empty arrays for "task_actions" and "artifacts" when no durable work item
+  or deliverable is needed.
 """
 
 STYLE_BLOCK = """

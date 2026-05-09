@@ -12,6 +12,16 @@ AgentRunStatus = Literal[
 ]
 ClarificationStatus = Literal["open", "resolved"]
 AgentMessageRole = Literal["user", "assistant"]
+TaskStatus = Literal[
+    "todo",
+    "in_progress",
+    "blocked",
+    "waiting_for_user",
+    "done",
+    "archived",
+]
+TaskPriority = Literal["low", "medium", "high", "urgent"]
+ArtifactFormat = Literal["markdown", "csv", "pdf", "text"]
 
 
 class AgentMessageCreate(BaseModel):
@@ -47,6 +57,7 @@ class ClarificationRequestResponse(BaseModel):
 
 class ClarificationResolutionRequest(BaseModel):
     resolution_note: str | None = Field(default=None, max_length=2000)
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 class AgentRunResponse(BaseModel):
@@ -64,6 +75,12 @@ class AgentRunResponse(BaseModel):
 
 
 class AgentMessageCreateResponse(BaseModel):
+    run: AgentRunResponse
+    user_message: AgentMessageResponse
+
+
+class ClarificationResolutionResponse(BaseModel):
+    clarification: ClarificationRequestResponse
     run: AgentRunResponse
     user_message: AgentMessageResponse
 
@@ -86,9 +103,28 @@ class AgentSummaryResponse(BaseModel):
     agents: list[AgentSummaryItemResponse]
 
 
+class LLMTaskAction(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    status: TaskStatus = "todo"
+    priority: TaskPriority = "medium"
+    owner_agent_type: AgentType | None = None
+    blocked_reason: str | None = None
+
+
+class LLMArtifactAction(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    artifact_type: str = "general"
+    format: ArtifactFormat = "markdown"
+    content: str = Field(min_length=1)
+    task_id: str | None = None
+
+
 class LLMStructuredResponse(BaseModel):
     content: str
     needs_clarification: bool = False
     clarification_question: str | None = None
     requested_docs: list[str] = Field(default_factory=list)
     citations: list[str] = Field(default_factory=list)
+    task_actions: list[LLMTaskAction] = Field(default_factory=list)
+    artifacts: list[LLMArtifactAction] = Field(default_factory=list)

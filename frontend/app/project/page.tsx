@@ -57,6 +57,7 @@ import {
   type Project,
 } from "@/lib/projects";
 import { cn } from "@/lib/utils";
+import { FounderWorkPanel } from "@/components/workspace/FounderWorkPanel";
 
 const AGENTS = [
   {
@@ -237,6 +238,7 @@ export default function ProjectPage() {
   const [projectMenuOpenId, setProjectMenuOpenId] = useState<string | null>(
     null,
   );
+  const [isWorkPanelOpen, setIsWorkPanelOpen] = useState(false);
 
   const {
     data: projects,
@@ -664,7 +666,7 @@ export default function ProjectPage() {
   };
 
   const handleResolveClarification = async (clarificationId: string) => {
-    if (!project) {
+    if (!project || isSending || !!streamingRunId) {
       return;
     }
 
@@ -673,32 +675,74 @@ export default function ProjectPage() {
       return;
     }
 
+    const attachmentsToUpload = [...pendingAttachments];
+    setInputValue("");
+    setPendingAttachments([]);
+
     try {
       setIsSending(true);
-      const attachmentsToUpload = [...pendingAttachments];
-      setInputValue("");
-      setPendingAttachments([]); // Clear UI immediately
+      setStreamingContent("");
+      setStreamActivities([
+        {
+          id: "resume",
+          title: "Thinking",
+          detail: "Resuming the task with your input",
+          tone: "neutral",
+        },
+      ]);
 
+      let attachmentIds: string[] = [];
       if (attachmentsToUpload.length > 0) {
-        await Promise.all(
+        const uploadedDocs = await Promise.all(
           attachmentsToUpload.map((file) => uploadDocument(project.id, file)),
         );
+        attachmentIds = uploadedDocs.map((document) => document.id);
         queryClient.invalidateQueries({
           queryKey: ["projects", project.id, "documents"],
         });
       }
 
-      await resolveClarification(
+      const clarificationResponse = await resolveClarification(
         project.id,
         clarificationId,
         note || "Attached requested documents.",
+        attachmentIds,
+      );
+
+      queryClient.setQueryData(
+        ["projects", project.id, "agents", activeAgent, "messages"],
+        (
+          old:
+            | {
+                messages?: AgentMessage[];
+                clarifications?: ClarificationRequest[];
+              }
+            | undefined,
+        ) => ({
+          ...old,
+          messages: [
+            ...(old?.messages ?? []),
+            clarificationResponse.user_message,
+          ],
+          clarifications: (old?.clarifications ?? []).map((clarification) =>
+            clarification.id === clarificationId
+              ? clarificationResponse.clarification
+              : clarification,
+          ),
+        }),
       );
 
       queryClient.invalidateQueries({
-        queryKey: ["projects", project.id, "agents", activeAgent, "messages"],
+        queryKey: ["projects", project.id, "agents", "summary"],
       });
+
+      setStreamingAgent(clarificationResponse.run.agent_type);
+      setStreamingRunId(clarificationResponse.run.id);
     } catch (resolveError) {
       console.error("Failed to resolve clarification:", resolveError);
+      setInputValue(note);
+      setPendingAttachments(attachmentsToUpload);
+      setStreamActivities([]);
       alert("Failed to resolve clarification");
     } finally {
       setIsSending(false);
@@ -1258,7 +1302,7 @@ export default function ProjectPage() {
           </div>
         </aside>
 
-        <section className="min-w-0 flex-1">
+        <section className="flex min-w-0 flex-1">
           <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#171717]">
             <header className="border-b border-white/8 px-5 py-4 sm:px-7">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1299,6 +1343,19 @@ export default function ProjectPage() {
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-white/42">
+                  <button
+                    type="button"
+                    onClick={() => setIsWorkPanelOpen((current) => !current)}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border px-3 py-2 transition hover:border-white/14 hover:bg-white/[0.06] hover:text-white/74",
+                      isWorkPanelOpen
+                        ? "border-white/18 bg-white/[0.08] text-white/78"
+                        : "border-white/8 bg-white/[0.03]",
+                    )}
+                  >
+                    <FolderOpen className="size-4" />
+                    <span className="hidden sm:inline">Work</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleOpenSearch}
@@ -1725,6 +1782,12 @@ export default function ProjectPage() {
               </div>
             </div>
           </div>
+          {isWorkPanelOpen ? (
+            <FounderWorkPanel
+              projectId={project.id}
+              onClose={() => setIsWorkPanelOpen(false)}
+            />
+          ) : null}
         </section>
       </div>
     </div>

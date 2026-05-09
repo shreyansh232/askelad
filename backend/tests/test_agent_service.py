@@ -46,3 +46,22 @@ def test_streaming_content_field_parser_decodes_escaped_sequences():
 
     assert first == 'Line 1\n'
     assert second == 'Line 2!'
+
+
+def test_build_prompt_includes_recent_context_for_clarification_answers():
+    project = type('ProjectStub', (), {'id': 'project-1'})()
+
+    prompt = agent_service._build_prompt(
+        project=project,
+        agent_type='cofounder',
+        user_message='Compare against Notion.',
+        context='Project name: Askelad',
+        conversation_context=(
+            '[Founder] I need to compare with this competitor\n'
+            '[Agent] Which competitor should I compare Askelad against?'
+        ),
+    )
+
+    assert 'Recent same-agent conversation context' in prompt
+    assert 'I need to compare with this competitor' in prompt
+    assert 'continue the earlier task' in prompt

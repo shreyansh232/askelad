@@ -57,6 +57,12 @@ export interface AgentMessageCreateResponse {
   user_message: AgentMessage;
 }
 
+export interface ClarificationResolutionResponse {
+  clarification: ClarificationRequest;
+  run: AgentRun;
+  user_message: AgentMessage;
+}
+
 export interface AgentHistoryResponse {
   thread_id: string;
   agent_type: AgentType;
@@ -115,12 +121,19 @@ export async function listProjectClarifications(
 export async function resolveClarification(
   projectId: string,
   clarificationId: string,
-  resolutionNote: string
-): Promise<ClarificationRequest> {
-  return apiFetch<ClarificationRequest>(`/projects/${projectId}/clarifications/${clarificationId}/resolve`, {
-    method: 'POST',
-    body: JSON.stringify({ resolution_note: resolutionNote }),
-  });
+  resolutionNote: string,
+  attachmentIds: string[] = []
+): Promise<ClarificationResolutionResponse> {
+  return apiFetch<ClarificationResolutionResponse>(
+    `/projects/${projectId}/clarifications/${clarificationId}/resolve`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        resolution_note: resolutionNote,
+        attachment_ids: attachmentIds,
+      }),
+    }
+  );
 }
 
 /**

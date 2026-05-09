@@ -41,6 +41,7 @@ from app.schemas.agents import (
     AgentType,
     ClarificationRequestResponse,
     ClarificationResolutionRequest,
+    ClarificationResolutionResponse,
 )
 from app.schemas.documents import DocumentResponse
 from app.services.agents import agent_service
@@ -360,7 +361,7 @@ async def list_project_clarifications(
 
 @router.post(
     "/clarifications/{clarification_id}/resolve",
-    response_model=ClarificationRequestResponse,
+    response_model=ClarificationResolutionResponse,
 )
 async def resolve_project_clarification(
     project_id: str,
@@ -368,7 +369,7 @@ async def resolve_project_clarification(
     body: ClarificationResolutionRequest,
     db: DbSession,
     current_user: CurrentUser,
-) -> ClarificationRequestResponse:
+) -> ClarificationResolutionResponse:
     """
     Mark a clarification as resolved (user answered the question).
 
@@ -379,12 +380,19 @@ async def resolve_project_clarification(
     Body: {"resolution_note": "My burn rate is $5k/month"}
     """
     await _get_owned_project(db, current_user, project_id)
-    clarification = await agent_service.resolve_clarification(
+    resolution = await agent_service.resolve_clarification(
         db,
         project_id,
         clarification_id,
         body.resolution_note,
+        body.attachment_ids,
     )
-    if not clarification:
+    if not resolution:
         raise HTTPException(status_code=404, detail="Clarification not found")
-    return ClarificationRequestResponse.model_validate(clarification)
+
+    clarification, run, user_message = resolution
+    return ClarificationResolutionResponse(
+        clarification=ClarificationRequestResponse.model_validate(clarification),
+        run=AgentRunResponse.model_validate(run),
+        user_message=AgentMessageResponse.model_validate(user_message),
+    )
