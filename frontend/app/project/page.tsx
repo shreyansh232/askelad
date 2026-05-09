@@ -1303,7 +1303,7 @@ export default function ProjectPage() {
         </aside>
 
         <section className="flex min-w-0 flex-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#171717]">
+          <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#171717]">
             <header className="border-b border-white/8 px-5 py-4 sm:px-7">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
