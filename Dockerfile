@@ -8,6 +8,6 @@ COPY backend/ /app
 
 RUN uv sync --frozen
 
-EXPOSE 8000
+EXPOSE 3000
 
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"]
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --workers 2"]
