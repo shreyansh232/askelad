@@ -74,6 +74,7 @@ export interface AgentSummaryItem {
   agent_type: AgentType;
   latest_run: AgentRun | null;
   unresolved_clarifications: number;
+  prompt_limit_reached: boolean;
 }
 
 export interface AgentSummaryResponse {

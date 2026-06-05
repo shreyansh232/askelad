@@ -96,6 +96,7 @@ class AgentSummaryItemResponse(BaseModel):
     agent_type: AgentType
     latest_run: AgentRunResponse | None
     unresolved_clarifications: int
+    prompt_limit_reached: bool = False
 
 
 class AgentSummaryResponse(BaseModel):

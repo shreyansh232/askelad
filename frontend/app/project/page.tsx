@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
@@ -245,6 +246,12 @@ export default function ProjectPage() {
     null,
   );
   const [isWorkPanelOpen, setIsWorkPanelOpen] = useState(false);
+  const [localLimitReached, setLocalLimitReached] = useState<Record<AgentType, boolean>>({
+    cofounder: false,
+    finance: false,
+    marketing: false,
+    product: false,
+  });
 
   const {
     data: projects,
@@ -309,6 +316,13 @@ export default function ProjectPage() {
     }
     return map;
   }, [agentSummary]);
+
+  const isActiveAgentLimitReached = useMemo(() => {
+    return (
+      (agentSummaryMap[activeAgent]?.prompt_limit_reached ?? false) ||
+      (localLimitReached[activeAgent] ?? false)
+    );
+  }, [agentSummaryMap, activeAgent, localLimitReached]);
 
   useEffect(() => {
     if (!project || !threads || threadsLoading) return;
@@ -784,7 +798,15 @@ export default function ProjectPage() {
       setPendingAttachments(attachmentsToUpload);
       setInputValue(content);
       setStreamActivities([]);
-      alert("Failed to send message. Please try again.");
+      const errMsg = sendError instanceof Error ? sendError.message : "";
+      if (errMsg.includes("limit of") && errMsg.includes("per day")) {
+        setLocalLimitReached((prev) => ({ ...prev, [activeAgent]: true }));
+        void queryClient.invalidateQueries({
+          queryKey: ["projects", project.id, "agents", "summary"],
+        });
+      } else {
+        alert("Failed to send message. Please try again.");
+      }
     } finally {
       setIsSending(false);
     }
@@ -869,7 +891,15 @@ export default function ProjectPage() {
       setInputValue(note);
       setPendingAttachments(attachmentsToUpload);
       setStreamActivities([]);
-      alert("Failed to resolve clarification");
+      const errMsg = resolveError instanceof Error ? resolveError.message : "";
+      if (errMsg.includes("limit of") && errMsg.includes("per day")) {
+        setLocalLimitReached((prev) => ({ ...prev, [activeAgent]: true }));
+        void queryClient.invalidateQueries({
+          queryKey: ["projects", project.id, "agents", "summary"],
+        });
+      } else {
+        alert("Failed to resolve clarification");
+      }
     } finally {
       setIsSending(false);
     }
@@ -1742,6 +1772,20 @@ export default function ProjectPage() {
                 </div>
 
                 <div className="relative pb-4 pt-3 w-full px-4 md:w-[90%] md:mx-auto md:px-0">
+                  {isActiveAgentLimitReached && (
+                    <div className="mb-3 flex items-center justify-between gap-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <span>You have reached your limit on the free plan. Please try again after 24 hours.</span>
+                      </div>
+                      <Link
+                        href="/settings"
+                        className="underline text-xs font-semibold uppercase tracking-wider text-red-200 hover:text-white shrink-0"
+                      >
+                        Upgrade
+                      </Link>
+                    </div>
+                  )}
                   <div
                     className={cn(
                       "border border-white/8 bg-[#1b1b1b] px-3 shadow-[0_-1px_0_rgba(255,255,255,0.02)_inset] transition-all",
@@ -1803,10 +1847,14 @@ export default function ProjectPage() {
 
                     <div className="flex items-end gap-2.5">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center ml-1">
-                        <label className="group relative flex h-full w-full cursor-pointer items-center justify-center text-white/40 transition hover:text-white">
+                        <label className={cn(
+                          "group relative flex h-full w-full items-center justify-center text-white/40 transition hover:text-white",
+                          isActiveAgentLimitReached ? "opacity-20 cursor-not-allowed pointer-events-none" : "cursor-pointer"
+                        )}>
                           <input
                             type="file"
                             className="hidden"
+                            disabled={isActiveAgentLimitReached}
                             accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,application/pdf"
                             onChange={(e) =>
                               handleAddAttachments(e.target.files)
@@ -1840,11 +1888,13 @@ export default function ProjectPage() {
                             }
                           }}
                           placeholder={
-                            openClarification
+                            isActiveAgentLimitReached
+                              ? "Limit reached. Please try again after 24 hours."
+                              : openClarification
                               ? "Provide an answer or attach a document..."
                               : `Message ${activeAgentMeta.label}...`
                           }
-                          disabled={isSending || !!streamingRunId}
+                          disabled={isSending || !!streamingRunId || isActiveAgentLimitReached}
                           className="max-h-[180px] min-h-[24px] w-full resize-none bg-transparent text-[19px] leading-6 text-white placeholder:text-white/26 focus:outline-none disabled:opacity-50 block"
                         />
                       </div>
@@ -1863,6 +1913,7 @@ export default function ProjectPage() {
                         disabled={
                           isSending ||
                           !!streamingRunId ||
+                          isActiveAgentLimitReached ||
                           (!inputValue.trim() &&
                             pendingAttachments.length === 0)
                         }

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     agent_excerpt_length: int = 2000
     agent_thread_context_messages: int = 8
 
-    plan_limit_free: int = 1
+    plan_limit_free: int = 10
     plan_limit_premium: int = 50
     plan_limit_admin: int = -1
 

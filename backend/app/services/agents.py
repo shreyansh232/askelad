@@ -41,6 +41,7 @@ from app.db.models import (
     ClarificationRequest,
     Document,
     Project,
+    User,
 )
 from app.schemas.agents import (
     AgentRunResponse,
@@ -646,6 +647,26 @@ class AgentService:
         - Which agents have been used
         - Which ones need attention (open questions)
         """
+        # Get the project to find the owner's plan
+        project_result = await db.execute(
+            select(Project).where(Project.id == project_id)
+        )
+        project = project_result.scalar_one_or_none()
+        user_plan = "free"
+        limit = settings.plan_limit_free
+        if project:
+            user_result = await db.execute(
+                select(User).where(User.id == project.user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if user:
+                user_plan = user.user_type.value
+                limit = {
+                    "free": settings.plan_limit_free,
+                    "premium": settings.plan_limit_premium,
+                    "admin": settings.plan_limit_admin,
+                }.get(user_plan, settings.plan_limit_free)
+
         items: list[AgentSummaryItemResponse] = []
         # Loop through all defined agents (cofounder, finance, marketing, product)
         for agent_type in AGENT_DEFINITIONS:
@@ -653,6 +674,27 @@ class AgentService:
             unresolved = await self._count_open_clarifications(
                 db, project_id, agent_type
             )
+
+            prompt_limit_reached = False
+            if limit != -1:
+                from datetime import datetime, timezone, timedelta
+
+                time_limit = datetime.now(timezone.utc) - timedelta(hours=24)
+                stmt = (
+                    select(func.count())
+                    .select_from(AgentMessage)
+                    .join(AgentThread, AgentMessage.thread_id == AgentThread.id)
+                    .where(
+                        AgentThread.project_id == project_id,
+                        AgentThread.agent_type == agent_type,
+                        AgentMessage.role == "user",
+                        AgentMessage.created_at >= time_limit,
+                    )
+                )
+                used_result = await db.execute(stmt)
+                used = used_result.scalar_one()
+                prompt_limit_reached = used >= limit
+
             latest_run_response = (
                 AgentRunResponse.model_validate(latest_run) if latest_run else None
             )
@@ -661,6 +703,7 @@ class AgentService:
                     agent_type=agent_type,
                     latest_run=latest_run_response,  # Their most recent response
                     unresolved_clarifications=unresolved,  # How many questions they're waiting on
+                    prompt_limit_reached=prompt_limit_reached,
                 )
             )
 

@@ -207,7 +207,11 @@ async def create_agent_message(
     limit = _PLAN_LIMITS.get(user_plan, _settings.plan_limit_free)
 
     if limit != -1:
-        # Count user messages sent in THIS project for this agent type
+        from datetime import datetime, timezone, timedelta
+
+        time_limit = datetime.now(timezone.utc) - timedelta(hours=24)
+
+        # Count user messages sent in THIS project for this agent type in the last 24 hours
         stmt = (
             select(func.count())
             .select_from(AgentMessage)
@@ -216,6 +220,7 @@ async def create_agent_message(
                 AgentThread.project_id == project.id,
                 AgentThread.agent_type == agent_type,
                 AgentMessage.role == "user",
+                AgentMessage.created_at >= time_limit,
             )
         )
         result = await db.execute(stmt)
@@ -227,7 +232,7 @@ async def create_agent_message(
                 status_code=403,
                 detail=(
                     f"You have reached your {plan_display} plan limit of "
-                    f"{limit} prompt(s) per agent. "
+                    f"{limit} prompt(s) per agent per day. "
                     "Upgrade to Premium for more messages."
                 ),
             )
