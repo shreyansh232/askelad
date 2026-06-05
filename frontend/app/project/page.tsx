@@ -61,6 +61,17 @@ import {
 import { cn } from "@/lib/utils";
 import { FounderWorkPanel } from "@/components/workspace/FounderWorkPanel";
 import { AgentThreadSidebar } from "@/components/workspace/AgentThreadSidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const AGENTS = [
   {
@@ -247,11 +258,14 @@ export default function ProjectPage() {
       return projects.find((p) => p.id === selectedProjectId) ?? projects[0];
     }
 
-    if (!selectedProjectId && projects.length > 0) {
+    return projects[0];
+  }, [projects, selectedProjectId]);
+
+  // Handle initial project selection in an effect, not in useMemo
+  useEffect(() => {
+    if (projects && projects.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
-
-    return projects[0];
   }, [projects, selectedProjectId]);
 
   const { data: threads, isLoading: threadsLoading } = useQuery<AgentThread[]>({
@@ -342,10 +356,15 @@ export default function ProjectPage() {
   const isActiveAgentStreaming =
     !!streamingRunId && streamingAgent === activeAgent;
   const latestActivity = streamActivities[streamActivities.length - 1];
+
   const documentNames = useMemo(
     () => (documents ?? []).map((document) => document.filename),
     [documents],
   );
+  const documentNamesRef = useRef<string[]>([]);
+  useEffect(() => {
+    documentNamesRef.current = documentNames;
+  }, [documentNames]);
   const searchMatches = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -380,9 +399,17 @@ export default function ProjectPage() {
     [clarifications],
   );
 
+  const [lastMessageCount, setLastMessageCount] = useState(0);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent, streamActivities.length, activeAgent]);
+    // Only auto-scroll if:
+    // 1. We are currently streaming content
+    // 2. The number of messages has increased (new message sent/received)
+    if (streamingContent || streamActivities.length > 0 || messages.length > lastMessageCount) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setLastMessageCount(messages.length);
+    }
+  }, [messages, streamingContent, streamActivities.length, lastMessageCount]);
 
   useEffect(() => {
     if (!isSearchOpen) {
@@ -468,7 +495,7 @@ export default function ProjectPage() {
           project.id,
           streamingThreadId,
           streamingRunId,
-          (event, data) => {
+          async (event, data) => {
             if (event === "run.started") {
               setStreamActivities([
                 {
@@ -485,7 +512,7 @@ export default function ProjectPage() {
               const contextDocuments =
                 getStringArray(data.documents).length > 0
                   ? getStringArray(data.documents)
-                  : documentNames;
+                  : documentNamesRef.current;
 
               setStreamActivities((current) =>
                 upsertActivity(current, {
@@ -622,13 +649,7 @@ export default function ProjectPage() {
             if (event === "run.completed" || event === "run.failed") {
               const streamedThread = streamingThreadId;
 
-              setStreamingRunId(null);
-              setStreamingAgent(null);
-              setStreamingThreadId(null);
-              setStreamingContent("");
-              setStreamActivities([]);
-
-              queryClient.invalidateQueries({
+              await queryClient.invalidateQueries({
                 queryKey: [
                   "projects",
                   project.id,
@@ -637,6 +658,12 @@ export default function ProjectPage() {
                   "messages",
                 ],
               });
+
+              setStreamingRunId(null);
+              setStreamingAgent(null);
+              setStreamingThreadId(null);
+              setStreamingContent("");
+              setStreamActivities([]);
             }
           },
           (nextController) => {
@@ -658,7 +685,7 @@ export default function ProjectPage() {
     return () => {
       controller?.abort();
     };
-  }, [documentNames, project, queryClient, streamingThreadId, streamingRunId]);
+  }, [project?.id, queryClient, streamingThreadId, streamingRunId]);
 
   useEffect(() => {
     if (!authLoading && !isLoggedIn) {
@@ -901,16 +928,13 @@ export default function ProjectPage() {
   };
 
   const handleDeleteDocument = async (documentId: string) => {
-    if (
-      !project ||
-      !confirm("Are you sure you want to delete this document?")
-    ) {
+    if (!project) {
       return;
     }
 
     try {
       await deleteDocument(project.id, documentId);
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ["projects", project.id, "documents"],
       });
     } catch (deleteError) {
@@ -1240,14 +1264,38 @@ export default function ProjectPage() {
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDocument(document.id)}
-                            className="rounded-full p-1 text-white/22 opacity-0 transition group-hover:opacity-100 hover:bg-white/[0.08] hover:text-red-300"
-                            aria-label={`Delete ${document.filename}`}
-                          >
-                            <Trash className="size-3.5" />
-                          </button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <button
+                                type="button"
+                                className="flex size-7 shrink-0 cursor-pointer items-center justify-center text-white/22 opacity-0 transition group-hover:opacity-100 hover:text-red-500"
+                                aria-label={`Delete ${document.filename}`}
+                              >
+                                <Trash className="size-3.5" />
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Delete Document</DialogTitle>
+                                <DialogDescription>
+                                  Are you sure you want to delete &quot;{document.filename}&quot;? This action cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter className="gap-2 sm:gap-0">
+                                <DialogClose asChild>
+                                  <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/5">
+                                    Cancel
+                                  </Button>
+                                </DialogClose>
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => handleDeleteDocument(document.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       ))}
                     </div>

@@ -192,7 +192,7 @@ export async function streamAgentRun(
   projectId: string,
   threadId: string,
   runId: string,
-  onEvent: (event: string, data: AgentStreamEvent['data']) => void,
+  onEvent: (event: string, data: AgentStreamEvent['data']) => void | Promise<void>,
   onAbort?: (controller: AbortController) => void
 ): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -237,7 +237,10 @@ export async function streamAgentRun(
           const event = eventMatch[1];
           try {
             const data = JSON.parse(dataMatch[1]);
-            onEvent(event, data);
+            const result = onEvent(event, data);
+            if (result instanceof Promise) {
+              await result;
+            }
           } catch (e) {
             console.error('Failed to parse SSE data:', e, dataMatch[1]);
           }
