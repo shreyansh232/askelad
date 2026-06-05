@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText } from "lucide-react";
+import { Download, FileText } from "@phosphor-icons/react";
 
 import type { Artifact, CofounderMonitor } from "@/lib/work";
 

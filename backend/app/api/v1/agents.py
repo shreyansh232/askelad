@@ -19,7 +19,7 @@ First principles:
 """
 
 import json
-from typing import Annotated, AsyncIterator
+from typing import Annotated, Any, AsyncIterator, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -36,6 +36,7 @@ from app.schemas.agents import (
     AgentMessageCreate,
     AgentMessageCreateResponse,
     AgentMessageResponse,
+    AgentMessageRole,
     AgentRunResponse,
     AgentSummaryResponse,
     AgentType,
@@ -72,7 +73,7 @@ _PLAN_LIMITS: dict[str, int] = {
 }
 
 
-def _encode_sse(event: str, data: dict) -> str:
+def _encode_sse(event: str, data: dict[str, Any]) -> str:
     """
     Encode data as Server-Sent Events (SSE) format.
 
@@ -230,7 +231,7 @@ async def list_agent_messages(
             AgentMessageResponse(
                 id=message.id,
                 run_id=message.run_id,
-                role=message.role,
+                role=cast(AgentMessageRole, message.role),
                 content=message.content,
                 citations=message.citations,
                 attachments=[

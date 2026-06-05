@@ -15,7 +15,8 @@ Thumbs.db
 
 # Project specific
 docker_data/
-skills/
+/skills/
+!backend/app/agents/skills/
 .pi/
 .pi-lens/
 .env

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { Manrope } from "next/font/google";
 
 import SmoothScroll from "@/components/SmoothScroll";
 import Providers from "./providers";
@@ -7,8 +7,8 @@ import Providers from "./providers";
 import "./globals.css";
 
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${jetbrainsMono.variable} antialiased`}
+        className={`${manrope.variable} antialiased`}
       >
         <SmoothScroll />
         <Providers>

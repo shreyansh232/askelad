@@ -16,19 +16,14 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
-    payload = {
-        'sub' : user_id,
-        'exp': expire,
-        'iat': datetime.now(timezone.utc)
-    }
-
+    payload = {"sub": user_id, "exp": expire, "iat": datetime.now(timezone.utc)}
 
     token = jwt.encode(
-        payload,
-        settings.secret_key.get_secret_value(),
-        algorithm='HS256'
+        payload, settings.secret_key.get_secret_value(), algorithm="HS256"
     )
 
     return token
@@ -37,11 +32,9 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
 def verify_access_token(token: str) -> Optional[str]:
     try:
         payload = jwt.decode(
-            token,
-            settings.secret_key.get_secret_value(),
-            algorithms=['HS256']
+            token, settings.secret_key.get_secret_value(), algorithms=["HS256"]
         )
-        return payload.get('sub')
+        return payload.get("sub")
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
@@ -51,4 +44,3 @@ def verify_access_token(token: str) -> Optional[str]:
 def generate_refresh_token() -> str:
     """Generate a cryptographically secure random refresh token."""
     return secrets.token_urlsafe(32)
-

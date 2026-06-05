@@ -1,6 +1,7 @@
 import csv
 import io
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from app.db.models import (
 )
 from app.schemas.work import (
     AgentRunStepResponse,
+    ArtifactFormat,
     ArtifactResponse,
     ArtifactVersionResponse,
     TaskResponse,
@@ -285,7 +287,7 @@ class WorkService:
             run_id=artifact.run_id,
             title=artifact.title,
             artifact_type=artifact.artifact_type,
-            format=artifact.format,
+            format=cast(ArtifactFormat, artifact.format),
             current_version_id=artifact.current_version_id,
             created_at=artifact.created_at,
             updated_at=artifact.updated_at,

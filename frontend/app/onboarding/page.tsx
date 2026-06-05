@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Loader2, Upload, X } from "lucide-react";
+import { ArrowRight, CircleNotch, Upload, X } from "@phosphor-icons/react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { createProject, listProjects } from "@/lib/projects";
@@ -72,7 +72,7 @@ function OnboardingContent() {
   if (isLoading || (isLoggedIn && projectsLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-5 animate-spin text-foreground/40" />
+        <CircleNotch className="size-5 animate-spin text-foreground/40" />
       </div>
     );
   }
@@ -261,7 +261,7 @@ function OnboardingContent() {
             className="mt-8 flex h-[52px] w-full items-center justify-center gap-2 rounded-[0.9rem] bg-white px-5 text-sm font-medium text-black transition-all hover:bg-white/90 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
             {submitting ? (
-              <Loader2 className="size-4 animate-spin" />
+              <CircleNotch className="size-4 animate-spin" />
             ) : (
               <>
                 Launch my AI team
@@ -284,7 +284,7 @@ export default function OnboardingPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background">
-          <Loader2 className="size-5 animate-spin text-foreground/40" />
+          <CircleNotch className="size-5 animate-spin text-foreground/40" />
         </div>
       }
     >

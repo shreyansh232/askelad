@@ -36,7 +36,7 @@ def _make_client() -> TestClient:
 
 
 def test_app_registers_documents_and_agent_routes():
-    routes = {route.path for route in app.routes}
+    routes = {getattr(route, "path") for route in app.routes if hasattr(route, "path")}
 
     assert "/api/projects/{project_id}/documents" in routes
     assert "/api/projects/{project_id}/agents/{agent_type}/messages" in routes

@@ -1,12 +1,9 @@
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
-
-limiter = Limiter(key_func=get_remote_address)
 from app.db.models import User
 from app.schemas.projects import ProjectResponse, ProjectUpdate
 from app.services.projects import (
@@ -18,18 +15,20 @@ from app.services.projects import (
 )
 from app.services.documents import document_service
 
+limiter = Limiter(key_func=get_remote_address)
 
-router = APIRouter(prefix='/projects', tags=['Projects'])
+
+router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
-@router.post('/', response_model=ProjectResponse, status_code=201)
+@router.post("/", response_model=ProjectResponse, status_code=201)
 @limiter.limit("5/minute")
 async def create_new_project(
     request: Request,
     name: str = Form(...),
-    description: Optional[str] = Form(None),
-    industry: Optional[str] = Form(None),
-    files: List[UploadFile] = File(None),
+    description: str | None = Form(None),
+    industry: str | None = Form(None),
+    files: list[UploadFile] | None = File(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -48,7 +47,7 @@ async def create_new_project(
             project_id=project.id,
             name=name,
             industry=industry or "General",
-            description=description or ""
+            description=description or "",
         )
     except Exception as e:
         # Log error but don't fail the whole request
@@ -63,12 +62,12 @@ async def create_new_project(
                     db=db,
                     project_id=project.id,
                     file_content=content,
-                    filename=file.filename
+                    filename=file.filename or "unnamed_file",
                 )
             except Exception as e:
                 # Log file-specific error
                 print(f"Error indexing file {file.filename}: {e}")
-    
+
     # Final Commit for all DB changes (Project + Documents)
     await db.commit()
     await db.refresh(project)
@@ -76,7 +75,7 @@ async def create_new_project(
     return ProjectResponse.model_validate(project)
 
 
-@router.get('/', response_model=list[ProjectResponse])
+@router.get("/", response_model=list[ProjectResponse])
 async def list_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -85,7 +84,7 @@ async def list_projects(
     return [ProjectResponse.model_validate(p) for p in projects]
 
 
-@router.get('/{project_id}', response_model=ProjectResponse)
+@router.get("/{project_id}", response_model=ProjectResponse)
 async def get_single_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
@@ -94,15 +93,15 @@ async def get_single_project(
     project = await get_project(db=db, project_id=project_id)
 
     if not project:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail="Project not found")
 
     if project.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail='Not authorized')
+        raise HTTPException(status_code=403, detail="Not authorized")
 
     return ProjectResponse.model_validate(project)
 
 
-@router.patch('/{project_id}', response_model=ProjectResponse)
+@router.patch("/{project_id}", response_model=ProjectResponse)
 async def update_existing_project(
     project_id: str,
     body: ProjectUpdate,
@@ -119,18 +118,20 @@ async def update_existing_project(
     )
 
     if not project:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail="Project not found")
 
     return ProjectResponse.model_validate(project)
 
 
-@router.delete('/{project_id}', status_code=204)
+@router.delete("/{project_id}", status_code=204)
 async def delete_existing_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    deleted = await delete_project(db=db, project_id=project_id, user_id=current_user.id)
+    deleted = await delete_project(
+        db=db, project_id=project_id, user_id=current_user.id
+    )
 
     if not deleted:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail="Project not found")

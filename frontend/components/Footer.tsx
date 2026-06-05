@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Github } from "lucide-react";
+import { ArrowUpRight, GithubLogo } from "@phosphor-icons/react";
 
 export default function Footer() {
   return (
@@ -37,7 +37,7 @@ export default function Footer() {
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 transition-colors hover:text-foreground"
                 >
-                  <Github className="size-4" />
+                  <GithubLogo className="size-4" />
                   GitHub
                   <ArrowUpRight className="size-3.5" />
                 </a>

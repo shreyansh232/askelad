@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Loader2, PlugZap } from "lucide-react";
+import { ArrowLeft, CheckCircle, CircleNotch, Lightning } from "@phosphor-icons/react";
 
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -128,7 +128,7 @@ export default function SettingsPage() {
 
         {isLoading ? (
           <div className="mt-16 flex justify-center">
-            <Loader2 className="size-5 animate-spin text-white/28" />
+            <CircleNotch className="size-5 animate-spin text-white/28" />
           </div>
         ) : (
           <div className="mt-12 space-y-12">
@@ -232,7 +232,7 @@ export default function SettingsPage() {
                         </div>
                         {saved?.status === "valid" ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/18 px-2 py-1 text-xs text-emerald-100/70">
-                            <CheckCircle2 className="size-3.5" />
+                            <CheckCircle className="size-3.5" />
                             Valid
                           </span>
                         ) : null}
@@ -277,7 +277,7 @@ export default function SettingsPage() {
                             "bg-white text-black hover:bg-white/90",
                           )}
                         >
-                          <PlugZap className="size-4" />
+                          <Lightning className="size-4" />
                           Test
                         </button>
                       </div>

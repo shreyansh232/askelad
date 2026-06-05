@@ -6,20 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Project
 
 
-
-async def create_project(db: AsyncSession, user_id: str, name: str, description: Optional[str] = None, industry: Optional[str] = None) -> Project:
+async def create_project(
+    db: AsyncSession,
+    user_id: str,
+    name: str,
+    description: Optional[str] = None,
+    industry: Optional[str] = None,
+) -> Project:
     project = Project(
-        user_id=user_id,
-        name=name,
-        description=description,
-        industry=industry
-        )
+        user_id=user_id, name=name, description=description, industry=industry
+    )
 
     db.add(project)
-    await db.flush() # Use flush instead of commit to get the ID without ending the transaction
+    await (
+        db.flush()
+    )  # Use flush instead of commit to get the ID without ending the transaction
     await db.refresh(project)
     return project
-
 
 
 async def get_project(db: AsyncSession, project_id: str) -> Optional[Project]:
@@ -44,9 +47,17 @@ async def get_user_projects(db: AsyncSession, user_id: str) -> list[Project]:
     result = await db.execute(select(Project).where(Project.user_id == user_id))
     projects = result.scalars().all()
 
-    return projects
+    return list(projects)
 
-async def update_project(db: AsyncSession, project_id: str, user_id: str, name: Optional[str] = None, description: Optional[str] = None, industry: Optional[str] = None) -> Optional[Project]:
+
+async def update_project(
+    db: AsyncSession,
+    project_id: str,
+    user_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    industry: Optional[str] = None,
+) -> Optional[Project]:
     result = await db.execute(
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
     )
@@ -79,5 +90,3 @@ async def delete_project(db: AsyncSession, project_id: str, user_id: str) -> boo
     await db.delete(project)
     await db.commit()
     return True
-
-    

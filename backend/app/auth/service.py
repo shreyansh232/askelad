@@ -10,7 +10,7 @@ async def find_or_create_user(
     google_id: str,
     email: str,
     name: str | None = None,
-    picture_url: str | None = None
+    picture_url: str | None = None,
 ) -> User:
     result = await db.execute(
         select(User).where(
@@ -30,17 +30,12 @@ async def find_or_create_user(
             user.name = name
         if picture_url is not None:
             user.picture_url = picture_url
-        
+
         await db.commit()
         await db.refresh(user)
         return user
-    
-    user = User(
-        google_id=google_id,
-        email=email,
-        name=name,
-        picture_url=picture_url
-    )
+
+    user = User(google_id=google_id, email=email, name=name, picture_url=picture_url)
 
     db.add(user)
     try:

@@ -1,3 +1,4 @@
+from typing import Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -24,7 +25,7 @@ app = FastAPI()
 app.state.limiter = limiter
 
 
-def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+def rate_limit_exceeded_handler(request: Request, exc: Any) -> JSONResponse:
     return JSONResponse(
         status_code=429,
         content={

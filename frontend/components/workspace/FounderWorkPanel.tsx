@@ -3,15 +3,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
+  Warning,
   Check,
-  Clock3,
-  Loader2,
+  Clock,
+  CircleNotch,
   Plus,
-  Radar,
-  RefreshCw,
+  Target,
+  ArrowsCounterClockwise,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 import {
   createDigest,
@@ -88,7 +88,7 @@ function TaskCard({ projectId, task }: { projectId: string; task: Task }) {
             aria-label="Mark task done"
           >
             {completeMutation.isPending ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <CircleNotch className="size-3.5 animate-spin" />
             ) : (
               <Check className="size-3.5" />
             )}
@@ -117,7 +117,7 @@ function TaskCard({ projectId, task }: { projectId: string; task: Task }) {
 
       {task.blocked_reason ? (
         <div className="mt-3 flex items-start gap-2 rounded-md border border-red-300/12 bg-red-400/[0.04] p-2 text-xs leading-5 text-red-100/68">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <Warning className="mt-0.5 size-3.5 shrink-0" />
           {task.blocked_reason}
         </div>
       ) : null}
@@ -143,7 +143,7 @@ function QueueTab({ projectId }: { projectId: string }) {
   });
 
   if (isLoading) {
-    return <Loader2 className="mx-auto mt-12 size-5 animate-spin text-white/28" />;
+    return <CircleNotch className="mx-auto mt-12 size-5 animate-spin text-white/28" />;
   }
 
   return (
@@ -185,7 +185,7 @@ function QueueTab({ projectId }: { projectId: string }) {
             aria-label="Add task"
           >
             {createMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
+              <CircleNotch className="size-4 animate-spin" />
             ) : (
               <Plus className="size-4" />
             )}
@@ -263,7 +263,7 @@ function ArtifactsTab({ projectId }: { projectId: string }) {
   });
 
   if (isLoading) {
-    return <Loader2 className="mx-auto mt-12 size-5 animate-spin text-white/28" />;
+    return <CircleNotch className="mx-auto mt-12 size-5 animate-spin text-white/28" />;
   }
 
   if (!artifacts?.length) {
@@ -318,9 +318,9 @@ function CofounderTab({ projectId }: { projectId: string }) {
         className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-white/90"
       >
         {digestMutation.isPending ? (
-          <Loader2 className="size-4 animate-spin" />
+          <CircleNotch className="size-4 animate-spin" />
         ) : (
-          <RefreshCw className="size-4" />
+          <ArrowsCounterClockwise className="size-4" />
         )}
         Generate cofounder brief
       </button>
@@ -337,7 +337,7 @@ function CofounderTab({ projectId }: { projectId: string }) {
                 className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3"
               >
                 <div className="flex items-center gap-2 text-xs text-white/34">
-                  <Clock3 className="size-3.5" />
+                  <Clock className="size-3.5" />
                   {new Date(digest.created_at).toLocaleString()}
                 </div>
                 <p className="mt-2 text-sm font-medium text-white/86">{digest.title}</p>
@@ -378,7 +378,7 @@ function CofounderTab({ projectId }: { projectId: string }) {
             disabled={!monitorTitle.trim() || !monitorQuery.trim()}
             className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-white/10 px-2 py-2 text-xs text-white/62 transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Radar className="size-3.5" />
+            <Target className="size-3.5" />
             Add monitor
           </button>
         </form>

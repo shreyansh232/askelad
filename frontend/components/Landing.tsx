@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@phosphor-icons/react";
 
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";

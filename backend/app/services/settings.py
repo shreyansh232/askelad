@@ -2,6 +2,7 @@ import base64
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import cast
 
 from cryptography.fernet import Fernet, InvalidToken
 from litellm import acompletion
@@ -17,7 +18,7 @@ from app.db.models import (
     User,
     UserSettings,
 )
-from app.schemas.settings import ProviderName, UserSettingsResponse
+from app.schemas.settings import ProviderKeyResponse, ProviderName, UserSettingsResponse
 
 
 settings = get_settings()
@@ -110,14 +111,17 @@ class SettingsService:
         user_settings = await self.get_or_create_user_settings(db, user.id)
         provider_keys = await self.list_provider_keys(db, user.id)
         used_prompts = await self.used_prompt_count(db, user.id)
+        provider_key_responses = [
+            ProviderKeyResponse.model_validate(pk) for pk in provider_keys
+        ]
         return UserSettingsResponse(
-            default_provider=user_settings.default_provider,
+            default_provider=cast(ProviderName, user_settings.default_provider),
             default_model=user_settings.default_model,
             platform_key_fallback=user_settings.platform_key_fallback,
             monthly_prompt_limit=user_settings.monthly_prompt_limit,
             plan_prompt_limit=self.plan_limit_for_user(user),
             used_prompts=used_prompts,
-            provider_keys=provider_keys,
+            provider_keys=provider_key_responses,
         )
 
     async def update_user_settings(

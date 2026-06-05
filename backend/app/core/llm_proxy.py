@@ -186,7 +186,10 @@ class LLMProxy:
             return await self._collect_stream(stream, on_content_delta=on_content_delta)
 
         response = await acompletion(**kwargs)
-        return self._message_from_provider(response.choices[0].message)
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise RuntimeError("LLM response did not include choices")
+        return self._message_from_provider(choices[0].message)
 
     async def complete_json(
         self,
@@ -216,13 +219,16 @@ class LLMProxy:
             kwargs["tool_choice"] = "auto"
 
         response = await acompletion(**kwargs)
-        message = self._message_from_provider(response.choices[0].message)
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise RuntimeError("LLM response did not include choices")
+        message = self._message_from_provider(choices[0].message)
 
         if message.tool_calls:
             # If there are tool calls, we return the message object so the caller can handle it
             return message
 
-        content = message.content if response.choices else None
+        content = message.content if choices else None
         if not content:
             logger.warning("LLM response did not include message content")
             return ""

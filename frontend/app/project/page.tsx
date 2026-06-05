@@ -1,39 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
-  BookText,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
+  Book,
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
   Command,
   Download,
   FileImage,
   FileText,
   FolderOpen,
   Globe,
-  Loader2,
+  CircleNotch,
   Megaphone,
-  MessageSquareText,
-  MoreHorizontal,
-  Paperclip,
+  ChatCenteredText,
+  DotsThree,
   PencilLine,
   Plus,
-  Search,
-  Settings,
-  Sparkles,
-  Trash2,
+  MagnifyingGlass,
+  Gear,
+  Sparkle,
+  Trash,
   Upload,
   Wallet,
   X,
-  LogOut,
-  CirclePlus,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
+  SignOut,
+  CaretDoubleLeft,
+  CaretDoubleRight,
+} from "@phosphor-icons/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -63,7 +60,7 @@ const AGENTS = [
   {
     id: "cofounder" as const,
     label: "Co-Founder",
-    icon: MessageSquareText,
+    icon: ChatCenteredText,
     fallback: "Strategic founder guidance",
     color: "text-sky-400",
     bg: "bg-sky-400/10",
@@ -185,7 +182,7 @@ function ActivityIcon({ tone }: { tone: ActivityTone }) {
   const className = "size-3.5";
 
   if (tone === "context") {
-    return <BookText className={className} />;
+    return <Book className={className} />;
   }
 
   if (tone === "search") {
@@ -197,10 +194,10 @@ function ActivityIcon({ tone }: { tone: ActivityTone }) {
   }
 
   if (tone === "draft") {
-    return <Sparkles className={className} />;
+    return <Sparkle className={className} />;
   }
 
-  return <Loader2 className={`${className} animate-spin`} />;
+  return <CircleNotch className={`${className} animate-spin`} />;
 }
 
 export default function ProjectPage() {
@@ -326,6 +323,20 @@ export default function ProjectPage() {
   }, [messages, searchQuery]);
   const activeSearchMatch = searchMatches[activeSearchIndex] ?? null;
 
+  const handleOpenSearch = useCallback(() => {
+    if (!isSearchOpen) {
+      setIsSearchOpen(true);
+      return;
+    }
+
+    if (searchMatches.length > 0) {
+      setActiveSearchIndex((current) => (current + 1) % searchMatches.length);
+      return;
+    }
+
+    searchInputRef.current?.focus();
+  }, [isSearchOpen, searchMatches.length]);
+
   const openClarification = useMemo(
     () => clarifications.find((c) => c.status === "open"),
     [clarifications],
@@ -394,7 +405,7 @@ export default function ProjectPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleOpenSearch]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -458,27 +469,43 @@ export default function ProjectPage() {
             if (event === "tool.called") {
               const argumentsValue = getRecordValue(data.arguments);
               const toolName = getStringValue(data.tool_name, "tool");
-              const query = getStringValue(
-                argumentsValue?.query,
-                "Searching the web",
-              );
-              const searchDepth =
-                getStringValue(argumentsValue?.search_depth) === "advanced"
-                  ? "Advanced depth"
-                  : "Quick scan";
+              
+              let title = `Running ${toolName}`;
+              let detail = JSON.stringify(argumentsValue ?? {});
+              let tone: ActivityTone = "search";
+
+              if (toolName === "web_search") {
+                const query = getStringValue(argumentsValue?.query, "Searching the web");
+                const searchDepth = getStringValue(argumentsValue?.search_depth) === "advanced" ? "Advanced depth" : "Quick scan";
+                title = `Searching for "${query}"`;
+                detail = searchDepth;
+              } else if (toolName === "access_skill_file") {
+                const skillName = getStringValue(argumentsValue?.skill_name, "skill");
+                title = `Reading skill: ${skillName}`;
+                detail = "Loading expert guidelines";
+                tone = "context";
+              } else if (toolName === "list_skills") {
+                title = "Listing available skills";
+                detail = "Searching backend skills repository";
+                tone = "context";
+              } else if (toolName === "list_mcp_servers") {
+                title = "Discovering MCP servers";
+                detail = "Listing connected data sources";
+                tone = "search";
+              } else if (toolName === "call_mcp_tool") {
+                const serverName = getStringValue(argumentsValue?.server_name, "mcp");
+                const mcpToolName = getStringValue(argumentsValue?.tool_name, "tool");
+                title = `MCP Server: ${serverName}`;
+                detail = `Executing tool: ${mcpToolName}`;
+                tone = "search";
+              }
 
               setStreamActivities((current) =>
                 upsertActivity(current, {
-                  id: `tool-${toolName}-${query}`,
-                  title:
-                    toolName === "web_search"
-                      ? `Searching for "${query}"`
-                      : `Running ${toolName}`,
-                  detail:
-                    toolName === "web_search"
-                      ? searchDepth
-                      : JSON.stringify(argumentsValue ?? {}),
-                  tone: "search",
+                  id: `tool-${toolName}-${JSON.stringify(argumentsValue)}`,
+                  title,
+                  detail,
+                  tone,
                 }),
               );
               return;
@@ -486,19 +513,38 @@ export default function ProjectPage() {
 
             if (event === "tool.completed") {
               const toolName = getStringValue(data.tool_name, "tool");
+              
+              let title = `${toolName} finished`;
+              let detail = getStringValue(data.summary, "Tool execution completed.");
+              let tone: ActivityTone = "search";
+
+              if (toolName === "web_search") {
+                title = "Search results ready";
+                tone = "search";
+              } else if (toolName === "access_skill_file") {
+                title = "Loaded skill details";
+                detail = getStringValue(data.summary, "Skill instructions imported.");
+                tone = "context";
+              } else if (toolName === "list_skills") {
+                title = "Skills repository mapped";
+                detail = getStringValue(data.summary, "Available guidelines retrieved.");
+                tone = "context";
+              } else if (toolName === "list_mcp_servers") {
+                title = "MCP servers mapped";
+                detail = getStringValue(data.summary, "Available MCP servers retrieved.");
+                tone = "search";
+              } else if (toolName === "call_mcp_tool") {
+                title = "MCP execution completed";
+                detail = getStringValue(data.summary, "Data retrieved successfully.");
+                tone = "search";
+              }
 
               setStreamActivities((current) =>
                 upsertActivity(current, {
                   id: `tool-result-${toolName}`,
-                  title:
-                    toolName === "web_search"
-                      ? "Search results ready"
-                      : `${toolName} finished`,
-                  detail: getStringValue(
-                    data.summary,
-                    "Tool execution completed.",
-                  ),
-                  tone: "search",
+                  title,
+                  detail,
+                  tone,
                 }),
               );
               return;
@@ -826,19 +872,6 @@ export default function ProjectPage() {
     }
   };
 
-  const handleOpenSearch = () => {
-    if (!isSearchOpen) {
-      setIsSearchOpen(true);
-      return;
-    }
-
-    if (searchMatches.length > 0) {
-      setActiveSearchIndex((current) => (current + 1) % searchMatches.length);
-      return;
-    }
-
-    searchInputRef.current?.focus();
-  };
 
   const handleCycleSearch = (direction: "next" | "prev") => {
     if (searchMatches.length === 0) {
@@ -898,7 +931,7 @@ export default function ProjectPage() {
   if (authLoading || (isLoggedIn && projectsLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#111111]">
-        <Loader2 className="size-5 animate-spin text-white/40" />
+        <CircleNotch className="size-5 animate-spin text-white/40" />
       </div>
     );
   }
@@ -946,9 +979,9 @@ export default function ProjectPage() {
               title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
               {isSidebarOpen ? (
-                <ChevronsLeft className="size-4" />
+                <CaretDoubleLeft className="size-4" />
               ) : (
-                <ChevronsRight className="size-4" />
+                <CaretDoubleRight className="size-4" />
               )}
             </button>
           </div>
@@ -1011,7 +1044,7 @@ export default function ProjectPage() {
                               )}
                               aria-label={`${p.name} settings`}
                             >
-                              <MoreHorizontal className="size-3.5" />
+                              <DotsThree className="size-3.5" />
                             </button>
 
                             {isMenuOpen && (
@@ -1023,7 +1056,7 @@ export default function ProjectPage() {
                                   }}
                                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white/50 transition hover:bg-white/[0.08] hover:text-white cursor-pointer"
                                 >
-                                  <Settings className="size-3" />
+                                  <Gear className="size-3" />
                                   Project Settings
                                 </button>
                               </div>
@@ -1167,7 +1200,7 @@ export default function ProjectPage() {
                     <div className="mt-3 space-y-2">
                       {isUploading ? (
                         <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
-                          <Loader2 className="size-3.5 animate-spin" />
+                          <CircleNotch className="size-3.5 animate-spin" />
                           Uploading document...
                         </div>
                       ) : null}
@@ -1193,7 +1226,7 @@ export default function ProjectPage() {
                             className="rounded-full p-1 text-white/22 opacity-0 transition group-hover:opacity-100 hover:bg-white/[0.08] hover:text-red-300"
                             aria-label={`Delete ${document.filename}`}
                           >
-                            <Trash2 className="size-3.5" />
+                            <Trash className="size-3.5" />
                           </button>
                         </div>
                       ))}
@@ -1224,7 +1257,7 @@ export default function ProjectPage() {
                 onClick={handleOpenSearch}
                 className="flex w-full items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/30 transition hover:border-white/10 hover:bg-white/[0.04] hover:text-white/50 cursor-pointer"
               >
-                <Search className="size-3.5" />
+                <MagnifyingGlass className="size-3.5" />
                 <span className="flex-1 text-left">Search conversations…</span>
                 <kbd className="flex items-center gap-0.5 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-white/25">
                   <Command className="size-2.5" />K
@@ -1245,6 +1278,7 @@ export default function ProjectPage() {
               )}
             >
               {user?.picture_url && !profileImageError ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={user.picture_url}
                   alt={user.name || "User"}
@@ -1282,7 +1316,7 @@ export default function ProjectPage() {
                     }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white/90"
                   >
-                    <Settings className="size-4" />
+                    <Gear className="size-4" />
                     Settings
                   </button>
                   <button
@@ -1293,7 +1327,7 @@ export default function ProjectPage() {
                     }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-400/80 transition hover:bg-red-400/10 hover:text-red-400"
                   >
-                    <LogOut className="size-4" />
+                    <SignOut className="size-4" />
                     Log out
                   </button>
                 </div>
@@ -1361,7 +1395,7 @@ export default function ProjectPage() {
                     onClick={handleOpenSearch}
                     className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-2 transition hover:border-white/14 hover:bg-white/[0.06] hover:text-white/74"
                   >
-                    <Search className="size-4" />
+                    <MagnifyingGlass className="size-4" />
                     <span className="hidden sm:inline">Search</span>
                   </button>
                   <button
@@ -1380,7 +1414,7 @@ export default function ProjectPage() {
               {isSearchOpen ? (
                 <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] p-2">
                   <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
-                    <Search className="size-4 text-white/36" />
+                    <MagnifyingGlass className="size-4 text-white/36" />
                     <input
                       ref={searchInputRef}
                       type="text"
@@ -1446,7 +1480,7 @@ export default function ProjectPage() {
                   <div className="space-y-7 pb-8 pt-3">
                     {historyLoading ? (
                       <div className="flex justify-center py-20">
-                        <Loader2 className="size-5 animate-spin text-white/18" />
+                        <CircleNotch className="size-5 animate-spin text-white/18" />
                       </div>
                     ) : messages.length === 0 && !isActiveAgentStreaming ? (
                       <div className="flex min-h-full items-center justify-center py-12">
@@ -1771,7 +1805,7 @@ export default function ProjectPage() {
                         aria-label="Send message"
                       >
                         {isSending || !!streamingRunId ? (
-                          <Loader2 className="size-6 animate-spin" />
+                          <CircleNotch className="size-6 animate-spin" />
                         ) : (
                           <ArrowUp className="size-6" />
                         )}

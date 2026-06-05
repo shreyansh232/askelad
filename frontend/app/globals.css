@@ -25,7 +25,7 @@
   --radius: 0.75rem;
   
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-mono: var(--font-manrope);
 }
 
 @theme inline {
@@ -50,7 +50,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-mono: var(--font-manrope);
   --radius-lg: var(--radius);
 }
 

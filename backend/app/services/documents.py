@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _sanitize_filename(filename: str) -> str:
-    """
+    r"""
     Sanitize a filename for safe storage in Supabase/object stores.
 
     Object stores are strict about:
@@ -93,7 +93,7 @@ class DocumentService:
         # Embeddings Initialization
         if settings.openai_api_key:
             self.embeddings = OpenAIEmbeddings(
-                openai_api_key=settings.openai_api_key.get_secret_value(),
+                api_key=settings.openai_api_key,
                 model="text-embedding-3-large",
                 dimensions=1024,  # Match user's Pinecone index dimension
             )
@@ -120,7 +120,7 @@ class DocumentService:
         self, project_id: str, name: str, industry: str, description: str
     ):
         """Indexes the core project details as a primary context block."""
-        if not (self.pinecone and self.embeddings):
+        if not (self.pinecone and self.embeddings and settings.pinecone_api_key):
             logger.info(
                 "Skipping metadata indexing for project %s because Pinecone or embeddings are unavailable",
                 project_id,
@@ -245,8 +245,15 @@ class DocumentService:
         vector_id = None
         excerpt = self.build_excerpt(text)
 
-        if self.pinecone and self.embeddings and text.strip():
-            logger.info("Indexing %s in Pinecone namespace %s", safe_filename, project_id)
+        if (
+            self.pinecone
+            and self.embeddings
+            and settings.pinecone_api_key
+            and text.strip()
+        ):
+            logger.info(
+                "Indexing %s in Pinecone namespace %s", safe_filename, project_id
+            )
             index_name = settings.pinecone_index_name
             vector_store = PineconeVectorStore(
                 index_name=index_name,

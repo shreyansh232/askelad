@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Literal, Optional
 
-UserTypeLiteral = Literal['free', 'premium', 'admin']
+UserTypeLiteral = Literal["free", "premium", "admin"]
 
 
 class UserResponse(BaseModel):
@@ -9,15 +9,15 @@ class UserResponse(BaseModel):
     email: str
     name: Optional[str] = None
     picture_url: Optional[str] = None
-    user_type: UserTypeLiteral = 'free'
+    user_type: UserTypeLiteral = "free"
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}
 
 
 class AuthResponse(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = 'bearer'
+    token_type: str = "bearer"
     user: UserResponse
 
 

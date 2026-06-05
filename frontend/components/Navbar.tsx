@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUpRight, LogOut } from 'lucide-react';
+import { ArrowUpRight, SignOut } from '@phosphor-icons/react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -107,7 +107,7 @@ export default function Navbar() {
                       }}
                       className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      <LogOut className="size-4" />
+                      <SignOut className="size-4" />
                       Sign out
                     </button>
                   </div>

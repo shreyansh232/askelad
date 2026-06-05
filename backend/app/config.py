@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "Askelad API"
     debug: bool = False
 
-    secret_key: SecretStr
+    secret_key: SecretStr = SecretStr("dummy-secret-key-min-32-chars-for-dev")
 
     access_token_expire_minutes: int = 60
     refresh_token_expire_minutes: int = 60 * 24 * 30
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
     google_redirect_uri: str = "https://app.askelad.com/api/auth/callback"
-    frontend_url: str
+    frontend_url: str = "http://localhost:3000"
 
     pinecone_api_key: Optional[SecretStr] = None
     pinecone_index_name: str = "askelad"
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     supabase_service_key: Optional[SecretStr] = None
     supabase_bucket: str = "PDFs"
 
-    tavily_api_key: Optional[str] = None
+    tavily_api_key: Optional[SecretStr] = None
 
     openai_api_key: Optional[SecretStr] = None
 
@@ -46,7 +46,9 @@ class Settings(BaseSettings):
 
     cofounder_cross_agent_messages: int = 3
 
-    database_url: str
+    database_url: str = (
+        "postgresql+asyncpg://askelad_user:askelad_password@localhost:5432/askelad"
+    )
 
     @field_validator("debug", mode="before")
     @classmethod

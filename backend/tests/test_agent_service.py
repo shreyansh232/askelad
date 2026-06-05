@@ -1,3 +1,5 @@
+from typing import cast
+from app.db.models import Project
 from app.services.agents import StreamingContentFieldParser, agent_service
 
 
@@ -8,24 +10,24 @@ def test_parse_response_accepts_code_fenced_json():
         '"citations":["deck.pdf"]}\n```'
     )
 
-    assert response.content == 'Answer'
+    assert response.content == "Answer"
     assert response.needs_clarification is True
-    assert response.requested_docs == ['pnl.csv']
-    assert response.citations == ['deck.pdf']
+    assert response.requested_docs == ["pnl.csv"]
+    assert response.citations == ["deck.pdf"]
 
 
 def test_parse_response_falls_back_to_plain_text():
-    response = agent_service._parse_response('Plain answer without JSON')
+    response = agent_service._parse_response("Plain answer without JSON")
 
-    assert response.content == 'Plain answer without JSON'
+    assert response.content == "Plain answer without JSON"
     assert response.needs_clarification is False
     assert response.requested_docs == []
 
 
 def test_chunk_text_splits_large_payload():
-    chunks = agent_service._chunk_text('abcdefghij', chunk_size=4)
+    chunks = agent_service._chunk_text("abcdefghij", chunk_size=4)
 
-    assert chunks == ['abcd', 'efgh', 'ij']
+    assert chunks == ["abcd", "efgh", "ij"]
 
 
 def test_streaming_content_field_parser_extracts_content_incrementally():
@@ -34,8 +36,8 @@ def test_streaming_content_field_parser_extracts_content_incrementally():
     first = parser.feed('{"content":"Hello')
     second = parser.feed(' world","needs_clarification":false}')
 
-    assert first == 'Hello'
-    assert second == ' world'
+    assert first == "Hello"
+    assert second == " world"
 
 
 def test_streaming_content_field_parser_decodes_escaped_sequences():
@@ -44,24 +46,24 @@ def test_streaming_content_field_parser_decodes_escaped_sequences():
     first = parser.feed('{"content":"Line 1\\n')
     second = parser.feed('Line 2\\u0021","needs_clarification":false}')
 
-    assert first == 'Line 1\n'
-    assert second == 'Line 2!'
+    assert first == "Line 1\n"
+    assert second == "Line 2!"
 
 
 def test_build_prompt_includes_recent_context_for_clarification_answers():
-    project = type('ProjectStub', (), {'id': 'project-1'})()
+    project = cast(Project, type("ProjectStub", (), {"id": "project-1"})())
 
     prompt = agent_service._build_prompt(
         project=project,
-        agent_type='cofounder',
-        user_message='Compare against Notion.',
-        context='Project name: Askelad',
+        agent_type="cofounder",
+        user_message="Compare against Notion.",
+        context="Project name: Askelad",
         conversation_context=(
-            '[Founder] I need to compare with this competitor\n'
-            '[Agent] Which competitor should I compare Askelad against?'
+            "[Founder] I need to compare with this competitor\n"
+            "[Agent] Which competitor should I compare Askelad against?"
         ),
     )
 
-    assert 'Recent same-agent conversation context' in prompt
-    assert 'I need to compare with this competitor' in prompt
-    assert 'continue the earlier task' in prompt
+    assert "Recent same-agent conversation context" in prompt
+    assert "I need to compare with this competitor" in prompt
+    assert "continue the earlier task" in prompt

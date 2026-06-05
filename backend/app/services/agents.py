@@ -43,6 +43,7 @@ from app.db.models import (
     Project,
 )
 from app.schemas.agents import (
+    AgentRunResponse,
     AgentSummaryItemResponse,
     AgentSummaryResponse,
     AgentType,
@@ -586,10 +587,13 @@ class AgentService:
             unresolved = await self._count_open_clarifications(
                 db, project_id, agent_type
             )
+            latest_run_response = (
+                AgentRunResponse.model_validate(latest_run) if latest_run else None
+            )
             items.append(
                 AgentSummaryItemResponse(
                     agent_type=agent_type,
-                    latest_run=latest_run,  # Their most recent response
+                    latest_run=latest_run_response,  # Their most recent response
                     unresolved_clarifications=unresolved,  # How many questions they're waiting on
                 )
             )
@@ -841,10 +845,7 @@ class AgentService:
 
             # Handle tool calls
             # Convert to dict for subsequent calls
-            if hasattr(response_message, "model_dump"):
-                messages.append(response_message.model_dump())
-            else:
-                messages.append(dict(response_message))
+            messages.append(response_message.model_dump())
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)

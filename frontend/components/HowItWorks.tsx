@@ -1,21 +1,21 @@
 'use client';
 
-import type { LucideIcon } from "lucide-react";
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import {
-  Activity,
-  CheckCircle2,
+  Pulse,
+  CheckCircle,
   FileText,
-  MessageCircle,
+  ChatCircle,
   ShieldCheck,
-  TrendingUp,
+  TrendUp,
   Users,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 interface CapabilityCard {
   title: string;
   eyebrow: string;
   description: string;
-  icon: LucideIcon;
+  icon: PhosphorIcon;
   iconClassName: string;
   iconWrapClassName: string;
 }
@@ -25,7 +25,7 @@ const capabilityCards: CapabilityCard[] = [
     title: "Finance agent",
     eyebrow: "CFO",
     description: "Build projections, pressure-test pricing, and keep your runway visible.",
-    icon: TrendingUp,
+    icon: TrendUp,
     iconClassName: "text-sky-200",
     iconWrapClassName: "border-sky-200/16 bg-sky-400/10",
   },
@@ -33,7 +33,7 @@ const capabilityCards: CapabilityCard[] = [
     title: "Marketing agent",
     eyebrow: "CMO",
     description: "Shape messaging, channels, and GTM moves around your actual context.",
-    icon: MessageCircle,
+    icon: ChatCircle,
     iconClassName: "text-emerald-200",
     iconWrapClassName: "border-emerald-200/16 bg-emerald-400/10",
   },
@@ -129,7 +129,7 @@ export default function HowItWorks() {
 
           <aside className="rounded-[1.9rem] border border-border/70 bg-[#2f2f2f] p-7 text-left backdrop-blur-md">
             <div className="flex items-center gap-3 text-sm text-foreground/65">
-              <Activity className="size-4 text-emerald-200" />
+              <Pulse className="size-4 text-emerald-200" />
               Live operating view
             </div>
 
@@ -142,14 +142,14 @@ export default function HowItWorks() {
                 value="Project brief, metrics, goals"
               />
               <StatusRow
-                icon={CheckCircle2}
+                icon={CheckCircle}
                 iconClassName="text-emerald-200"
                 iconWrapClassName="border-emerald-200/16 bg-emerald-400/10"
                 label="Clarification rules"
                 value="No guessing on critical inputs"
               />
               <StatusRow
-                icon={MessageCircle}
+                icon={ChatCircle}
                 iconClassName="text-amber-100"
                 iconWrapClassName="border-amber-100/16 bg-amber-300/10"
                 label="Founder loop"
@@ -181,7 +181,7 @@ function StatusRow({
   label,
   value,
 }: {
-  icon: LucideIcon;
+  icon: PhosphorIcon;
   iconClassName: string;
   iconWrapClassName: string;
   label: string;
