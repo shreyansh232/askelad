@@ -22,6 +22,7 @@ import {
   Plus,
   MagnifyingGlass,
   Gear,
+  List,
   Sparkle,
   Trash,
   Upload,
@@ -213,6 +214,12 @@ export default function ProjectPage() {
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
   const [expandedAgent, setExpandedAgent] = useState<AgentType | null>("cofounder");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsSidebarOpen(window.innerWidth >= 768);
+    }
+  }, []);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [profileImageError, setProfileImageError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -1073,10 +1080,16 @@ export default function ProjectPage() {
   return (
     <div className="h-screen overflow-hidden bg-[#111111] text-white selection:bg-white/10">
       <div className="flex h-full">
+        {isSidebarOpen && (
+          <div
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          />
+        )}
         <aside
           className={cn(
-            "relative flex h-full shrink-0 flex-col border-r border-white/8 bg-[#101010]/95 backdrop-blur-xl transition-all duration-300",
-            isSidebarOpen ? "w-[310px]" : "w-[84px]",
+            "fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col border-r border-white/8 bg-[#101010] backdrop-blur-xl transition-all duration-300 md:relative md:translate-x-0 md:z-auto md:bg-[#101010]/95",
+            isSidebarOpen ? "w-[290px] translate-x-0 md:w-[310px]" : "-translate-x-full md:w-[84px] md:translate-x-0",
           )}
         >
           <div
@@ -1154,7 +1167,7 @@ export default function ProjectPage() {
                                 "absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-white/20 transition hover:bg-white/[0.08] hover:text-white/50 cursor-pointer",
                                 isMenuOpen
                                   ? "opacity-100 bg-white/[0.06] text-white/40"
-                                  : "opacity-0 group-hover:opacity-100",
+                                  : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
                               )}
                               aria-label={`${p.name} settings`}
                             >
@@ -1268,7 +1281,7 @@ export default function ProjectPage() {
                             <DialogTrigger asChild>
                               <button
                                 type="button"
-                                className="flex size-7 shrink-0 cursor-pointer items-center justify-center text-white/22 opacity-0 transition group-hover:opacity-100 hover:text-red-500"
+                                className="flex size-7 shrink-0 cursor-pointer items-center justify-center text-white/22 opacity-100 md:opacity-0 transition md:group-hover:opacity-100 hover:text-red-500"
                                 aria-label={`Delete ${document.filename}`}
                               >
                                 <Trash className="size-3.5" />
@@ -1393,6 +1406,14 @@ export default function ProjectPage() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsSidebarOpen(true)}
+                      className="inline-flex size-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white/60 transition hover:bg-white/[0.08] hover:text-white md:hidden shrink-0 cursor-pointer"
+                      aria-label="Open sidebar"
+                    >
+                      <List className="size-4" />
+                    </button>
                     <h1 className="truncate text-base font-medium text-white/92">
                       {project.name}
                     </h1>
@@ -1727,7 +1748,7 @@ export default function ProjectPage() {
                   </div>
                 </div>
 
-                <div className="relative pb-4 pt-3 w-[90%] mx-auto">
+                <div className="relative pb-4 pt-3 w-full px-4 md:w-[90%] md:mx-auto md:px-0">
                   <div
                     className={cn(
                       "border border-white/8 bg-[#1b1b1b] px-3 shadow-[0_-1px_0_rgba(255,255,255,0.02)_inset] transition-all",
@@ -1867,6 +1888,12 @@ export default function ProjectPage() {
               </div>
             </div>
           </div>
+          {isWorkPanelOpen && (
+            <div
+              onClick={() => setIsWorkPanelOpen(false)}
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+            />
+          )}
           {isWorkPanelOpen ? (
             <FounderWorkPanel
               projectId={project.id}

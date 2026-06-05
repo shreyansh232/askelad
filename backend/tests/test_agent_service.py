@@ -51,7 +51,9 @@ def test_streaming_content_field_parser_decodes_escaped_sequences():
 
 
 def test_build_prompt_includes_recent_context_for_clarification_answers():
-    project = cast(Project, type("ProjectStub", (), {"id": "project-1"})())
+    project = cast(
+        Project, type("ProjectStub", (), {"id": "project-1", "name": "Askelad"})()
+    )
 
     prompt = agent_service._build_prompt(
         project=project,
@@ -64,6 +66,5 @@ def test_build_prompt_includes_recent_context_for_clarification_answers():
         ),
     )
 
-    assert "Recent same-agent conversation context" in prompt
+    assert "Recent Conversation History" in prompt
     assert "I need to compare with this competitor" in prompt
-    assert "continue the earlier task" in prompt

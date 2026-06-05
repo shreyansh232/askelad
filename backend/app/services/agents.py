@@ -28,7 +28,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, cast
 from pydantic import ValidationError
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from supabase import Client
 
 from app.agents import AGENT_DEFINITIONS, get_agent_definition
 from app.agents.tools import TOOL_MAP
@@ -1373,8 +1372,7 @@ class AgentService:
         conversation_block = ""
         if conversation_context:
             conversation_block = (
-                "## Recent Conversation History\n"
-                f"{conversation_context}\n\n"
+                f"## Recent Conversation History\n{conversation_context}\n\n"
             )
 
         return (

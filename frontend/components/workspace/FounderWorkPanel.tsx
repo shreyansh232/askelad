@@ -406,7 +406,7 @@ export function FounderWorkPanel({ projectId, onClose }: FounderWorkPanelProps) 
   );
 
   return (
-    <aside className="flex h-full w-[420px] shrink-0 flex-col border-l border-white/8 bg-[#141414]">
+    <aside className="fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[420px] shrink-0 flex-col border-l border-white/8 bg-[#141414] shadow-2xl md:relative md:z-auto md:shadow-none">
       <header className="border-b border-white/8 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>

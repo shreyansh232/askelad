@@ -230,14 +230,14 @@ export function AgentThreadSidebar({
                         e.stopPropagation();
                         void onCreateThread(agent.id);
                       }}
-                      className="flex size-6 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-[#141414]/90 text-white/40 opacity-0 transition duration-200 hover:bg-white/[0.08] hover:text-white group-hover:opacity-100 shadow-sm"
+                      className="flex size-6 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-[#141414]/90 text-white/40 opacity-100 md:opacity-0 transition duration-200 hover:bg-white/[0.08] hover:text-white md:group-hover:opacity-100 shadow-sm"
                       title="New Conversation"
                     >
                       <Plus className="size-3.5" />
                     </button>
 
                     {/* Keyboard Shortcut (hidden on hover so the plus button takes the rightmost spot) */}
-                    <span className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/20 font-mono transition duration-200 group-hover:hidden group-hover:opacity-0 shrink-0">
+                    <span className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/20 font-mono transition duration-200 hidden md:inline-block md:group-hover:hidden md:group-hover:opacity-0 shrink-0">
                       ⌘{shortcutKey}
                     </span>
                   </div>
@@ -306,7 +306,7 @@ export function AgentThreadSidebar({
                               </span>
 
                               {/* Action Buttons (visible only on hover of the thread row) */}
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover/thread:opacity-100 transition-opacity duration-150 shrink-0 ml-1.5">
+                              <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover/thread:opacity-100 transition-opacity duration-150 shrink-0 ml-1.5">
                                 <button
                                   type="button"
                                   onClick={(e) => {
