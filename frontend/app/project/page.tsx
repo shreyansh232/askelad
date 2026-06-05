@@ -362,7 +362,6 @@ export default function ProjectPage() {
     : null;
   const isActiveAgentStreaming =
     !!streamingRunId && streamingAgent === activeAgent;
-  const latestActivity = streamActivities[streamActivities.length - 1];
 
   const documentNames = useMemo(
     () => (documents ?? []).map((document) => document.filename),
@@ -1426,14 +1425,8 @@ export default function ProjectPage() {
                       <activeAgentMeta.icon
                         className={cn("size-3.5", activeAgentMeta.color)}
                       />
-                      {activeAgentMeta.label}
+                                          {activeAgentMeta.label}
                     </div>
-                    {isActiveAgentStreaming && latestActivity ? (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/58">
-                        <ActivityIcon tone={latestActivity.tone} />
-                        <span className="truncate">{latestActivity.title}</span>
-                      </div>
-                    ) : null}
                   </div>
 
                   {streamingRunId &&

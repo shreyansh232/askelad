@@ -238,7 +238,7 @@ export function AgentThreadSidebar({
 
                     {/* Keyboard Shortcut (hidden on hover so the plus button takes the rightmost spot) */}
                     <span className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/20 font-mono transition duration-200 hidden md:inline-block md:group-hover:hidden md:group-hover:opacity-0 shrink-0">
-                      ⌘{shortcutKey}
+                      ⌘ {shortcutKey}
                     </span>
                   </div>
                 )}

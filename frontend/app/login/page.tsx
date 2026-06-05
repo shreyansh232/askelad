@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from '@phosphor-icons/react';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 export default function LoginPage() {
   const router = useRouter();
   const { isLoading, isLoggedIn } = useAuth();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isLoggedIn) {
@@ -20,6 +21,7 @@ export default function LoginPage() {
   }, [isLoading, isLoggedIn, router]);
 
   function handleGoogleLogin() {
+    setIsRedirecting(true);
     window.location.href = getLoginUrl();
   }
 
@@ -94,10 +96,23 @@ export default function LoginPage() {
                 <Button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="mt-8 flex h-[52px] w-full items-center justify-center gap-3 rounded-[0.9rem] bg-white px-5 text-sm font-medium text-black transition-all hover:bg-white/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1b1b1b]"
+                  disabled={isRedirecting || isLoading}
+                  className="mt-8 flex h-[52px] w-full items-center justify-center gap-3 rounded-[0.9rem] bg-white px-5 text-sm font-medium text-black transition-all hover:bg-white/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1b1b1b] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <GoogleMark />
-                  Sign in with Google
+                  {isRedirecting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Redirecting...
+                    </>
+                  ) : (
+                    <>
+                      <GoogleMark />
+                      Sign in with Google
+                    </>
+                  )}
                 </Button>
 
                 <div className="mt-6 flex justify-center items-center text-xs text-foreground/42">
