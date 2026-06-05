@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 
 import SmoothScroll from "@/components/SmoothScroll";
 import Providers from "./providers";
+import { Analytics } from "@vercel/analytics/react";
 
 import "./globals.css";
 
