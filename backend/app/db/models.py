@@ -163,17 +163,15 @@ class Document(Base):
 
 class AgentThread(Base):
     __tablename__ = "agent_threads"
-    __table_args__ = (
-        UniqueConstraint(
-            "project_id", "agent_type", name="uq_agent_thread_project_agent"
-        ),
-    )
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     agent_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="New Conversation"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -331,7 +329,9 @@ class TaskEvent(Base):
     actor_label: Mapped[Optional[str]] = mapped_column(String(120))
     event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -375,7 +375,9 @@ class TaskArtifactVersion(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     created_by: Mapped[str] = mapped_column(
         String(120), nullable=False, default="agent"
     )

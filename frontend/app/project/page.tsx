@@ -41,10 +41,15 @@ import {
   listAgentMessages,
   resolveClarification,
   streamAgentRun,
+  listAgentThreads,
+  createAgentThread,
+  renameAgentThread,
+  deleteAgentThread,
   type AgentMessage,
   type AgentSummaryItem,
   type AgentType,
   type ClarificationRequest,
+  type AgentThread,
 } from "@/lib/agents";
 import {
   deleteDocument,
@@ -55,6 +60,7 @@ import {
 } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import { FounderWorkPanel } from "@/components/workspace/FounderWorkPanel";
+import { AgentThreadSidebar } from "@/components/workspace/AgentThreadSidebar";
 
 const AGENTS = [
   {
@@ -90,24 +96,6 @@ const AGENTS = [
     bg: "bg-violet-400/10",
   },
 ] as const;
-
-function formatRelativeTime(timestamp?: string | null) {
-  if (!timestamp) return "unknown";
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "Just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(timestamp).toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 type ActivityTone = "neutral" | "context" | "search" | "draft" | "error";
 
@@ -210,6 +198,9 @@ export default function ProjectPage() {
   const { isLoading: authLoading, isLoggedIn, user, handleLogout } = useAuth();
 
   const [activeAgent, setActiveAgent] = useState<AgentType>("cofounder");
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
+  const [expandedAgent, setExpandedAgent] = useState<AgentType | null>("cofounder");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [profileImageError, setProfileImageError] = useState(false);
@@ -263,10 +254,16 @@ export default function ProjectPage() {
     return projects[0];
   }, [projects, selectedProjectId]);
 
-  const { data: history, isLoading: historyLoading } = useQuery({
-    queryKey: ["projects", project?.id, "agents", activeAgent, "messages"],
-    queryFn: () => listAgentMessages(project!.id, activeAgent),
+  const { data: threads, isLoading: threadsLoading } = useQuery<AgentThread[]>({
+    queryKey: ["projects", project?.id, "threads"],
+    queryFn: () => listAgentThreads(project!.id),
     enabled: !!project,
+  });
+
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ["projects", project?.id, "threads", activeThreadId, "messages"],
+    queryFn: () => listAgentMessages(project!.id, activeThreadId!),
+    enabled: !!project && !!activeThreadId,
   });
 
   const { data: documents } = useQuery({
@@ -291,6 +288,47 @@ export default function ProjectPage() {
     }
     return map;
   }, [agentSummary]);
+
+  useEffect(() => {
+    if (!project || !threads || threadsLoading) return;
+
+    const agentThreads = threads.filter((t) => t.agent_type === activeAgent);
+
+    if (agentThreads.length > 0) {
+      const currentActiveThread = threads.find((t) => t.id === activeThreadId);
+      if (!activeThreadId || currentActiveThread?.agent_type !== activeAgent) {
+        const sorted = [...agentThreads].sort(
+          (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+        setActiveThreadId(sorted[0].id);
+      }
+    } else {
+      const autoCreate = async () => {
+        try {
+          const newThread = await createAgentThread(project.id, activeAgent);
+          await queryClient.invalidateQueries({
+            queryKey: ["projects", project.id, "threads"],
+          });
+          setActiveThreadId(newThread.id);
+        } catch (e) {
+          console.error("Failed to auto-create thread:", e);
+        }
+      };
+      void autoCreate();
+    }
+  }, [
+    activeAgent,
+    threads,
+    activeThreadId,
+    project,
+    threadsLoading,
+    queryClient,
+  ]);
+
+  useEffect(() => {
+    setExpandedAgent(activeAgent);
+  }, [activeAgent]);
 
   const messages = useMemo(() => history?.messages ?? [], [history]);
   const clarifications = useMemo(
@@ -418,7 +456,7 @@ export default function ProjectPage() {
   }, [inputValue]);
 
   useEffect(() => {
-    if (!project || !streamingRunId || !streamingAgent) {
+    if (!project || !streamingRunId || !streamingThreadId) {
       return;
     }
 
@@ -428,7 +466,7 @@ export default function ProjectPage() {
       try {
         await streamAgentRun(
           project.id,
-          streamingAgent,
+          streamingThreadId,
           streamingRunId,
           (event, data) => {
             if (event === "run.started") {
@@ -479,6 +517,7 @@ export default function ProjectPage() {
                 const searchDepth = getStringValue(argumentsValue?.search_depth) === "advanced" ? "Advanced depth" : "Quick scan";
                 title = `Searching for "${query}"`;
                 detail = searchDepth;
+                tone = "search";
               } else if (toolName === "access_skill_file") {
                 const skillName = getStringValue(argumentsValue?.skill_name, "skill");
                 title = `Reading skill: ${skillName}`;
@@ -581,10 +620,11 @@ export default function ProjectPage() {
             }
 
             if (event === "run.completed" || event === "run.failed") {
-              const streamedAgent = streamingAgent;
+              const streamedThread = streamingThreadId;
 
               setStreamingRunId(null);
               setStreamingAgent(null);
+              setStreamingThreadId(null);
               setStreamingContent("");
               setStreamActivities([]);
 
@@ -592,8 +632,8 @@ export default function ProjectPage() {
                 queryKey: [
                   "projects",
                   project.id,
-                  "agents",
-                  streamedAgent,
+                  "threads",
+                  streamedThread,
                   "messages",
                 ],
               });
@@ -607,6 +647,7 @@ export default function ProjectPage() {
         console.error("Streaming failed:", streamError);
         setStreamingRunId(null);
         setStreamingAgent(null);
+        setStreamingThreadId(null);
         setStreamingContent("");
         setStreamActivities([]);
       }
@@ -617,7 +658,7 @@ export default function ProjectPage() {
     return () => {
       controller?.abort();
     };
-  }, [documentNames, project, queryClient, streamingAgent, streamingRunId]);
+  }, [documentNames, project, queryClient, streamingThreadId, streamingRunId]);
 
   useEffect(() => {
     if (!authLoading && !isLoggedIn) {
@@ -676,13 +717,13 @@ export default function ProjectPage() {
 
       const response = await createAgentMessage(
         project.id,
-        activeAgent,
+        activeThreadId!,
         content,
         attachmentIds,
       );
 
       queryClient.setQueryData(
-        ["projects", project.id, "agents", activeAgent, "messages"],
+        ["projects", project.id, "threads", activeThreadId, "messages"],
         (
           old:
             | {
@@ -697,7 +738,12 @@ export default function ProjectPage() {
         }),
       );
 
+      queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "threads"],
+      });
+
       setStreamingAgent(activeAgent);
+      setStreamingThreadId(activeThreadId);
       setStreamingRunId(response.run.id);
     } catch (sendError) {
       console.error("Failed to send message:", sendError);
@@ -756,7 +802,7 @@ export default function ProjectPage() {
       );
 
       queryClient.setQueryData(
-        ["projects", project.id, "agents", activeAgent, "messages"],
+        ["projects", project.id, "threads", activeThreadId, "messages"],
         (
           old:
             | {
@@ -783,6 +829,7 @@ export default function ProjectPage() {
       });
 
       setStreamingAgent(clarificationResponse.run.agent_type);
+      setStreamingThreadId(activeThreadId);
       setStreamingRunId(clarificationResponse.run.id);
     } catch (resolveError) {
       console.error("Failed to resolve clarification:", resolveError);
@@ -872,6 +919,46 @@ export default function ProjectPage() {
     }
   };
 
+  const handleCreateThread = async (agentType: AgentType) => {
+    if (!project) return;
+    try {
+      const newThread = await createAgentThread(project.id, agentType);
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "threads"],
+      });
+      setActiveAgent(agentType);
+      setActiveThreadId(newThread.id);
+    } catch (e) {
+      console.error("Failed to create thread:", e);
+    }
+  };
+
+  const handleRenameThread = async (threadId: string, newTitle: string) => {
+    if (!project) return;
+    try {
+      await renameAgentThread(project.id, threadId, newTitle);
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "threads"],
+      });
+    } catch (e) {
+      console.error("Failed to rename thread:", e);
+    }
+  };
+
+  const handleDeleteThread = async (threadId: string) => {
+    if (!project) return;
+    try {
+      await deleteAgentThread(project.id, threadId);
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "threads"],
+      });
+      if (activeThreadId === threadId) {
+        setActiveThreadId(null);
+      }
+    } catch (e) {
+      console.error("Failed to delete thread:", e);
+    }
+  };
 
   const handleCycleSearch = (direction: "next" | "prev") => {
     if (searchMatches.length === 0) {
@@ -892,8 +979,11 @@ export default function ProjectPage() {
       return;
     }
 
+    const activeThread = threads?.find((t) => t.id === activeThreadId);
+    const threadTitle = activeThread ? activeThread.title : activeAgentMeta.label;
+
     const lines = [
-      `# ${project.name} - ${activeAgentMeta.label} conversation`,
+      `# ${project.name} - ${threadTitle} (${activeAgentMeta.label})`,
       "",
       `Exported: ${new Date().toLocaleString()}`,
       "",
@@ -921,9 +1011,9 @@ export default function ProjectPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${project.name}-${activeAgentMeta.id}-conversation.md`
+    link.download = `${project.name}-${threadTitle}-conversation.md`
       .toLowerCase()
-      .replace(/\s+/g, "-");
+      .replace(/[^a-z0-9]+/g, "-");
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -962,7 +1052,7 @@ export default function ProjectPage() {
         <aside
           className={cn(
             "relative flex h-full shrink-0 flex-col border-r border-white/8 bg-[#101010]/95 backdrop-blur-xl transition-all duration-300",
-            isSidebarOpen ? "w-[280px]" : "w-[84px]",
+            isSidebarOpen ? "w-[310px]" : "w-[84px]",
           )}
         >
           <div
@@ -1084,90 +1174,20 @@ export default function ProjectPage() {
               <div className="mx-2 my-4 border-t border-white/[0.06]" />
             )}
 
-            <nav>
-              <div className="space-y-2">
-                {AGENTS.map((agent, index) => {
-                  const Icon = agent.icon;
-                  const isActive = activeAgent === agent.id;
-                  const summary = agentSummaryMap[agent.id];
-                  const lastRun = summary?.latest_run;
-                  const hasUnresolved =
-                    (summary?.unresolved_clarifications ?? 0) > 0;
-                  const shortcutKey = index + 1;
-
-                  // Build subtitle: show live timestamp if available, else fallback
-                  let subtitle: string = agent.fallback;
-                  if (lastRun?.completed_at) {
-                    subtitle = `Last active ${formatRelativeTime(lastRun.completed_at)}`;
-                  } else if (lastRun?.created_at) {
-                    subtitle = `Running ${formatRelativeTime(lastRun.created_at)}`;
-                  }
-
-                  return (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => setActiveAgent(agent.id)}
-                      className={cn(
-                        "flex w-full items-center border text-left transition",
-                        isSidebarOpen
-                          ? "gap-3 rounded-[1.1rem] px-3 py-3"
-                          : "justify-center rounded-full px-0 py-1.5",
-                        isActive
-                          ? "border-white/12 bg-white/[0.09] text-white shadow-[0_12px_30px_rgba(0,0,0,0.18)]"
-                          : "border-transparent text-white/52 hover:border-white/8 hover:bg-white/[0.05] hover:text-white/88",
-                      )}
-                      title={`${agent.label} (⌘${shortcutKey})`}
-                    >
-                      <div className="relative">
-                        <div
-                          className={cn(
-                            "flex shrink-0 items-center justify-center",
-                            isSidebarOpen
-                              ? "size-9 rounded-2xl"
-                              : "size-11 rounded-full",
-                            isActive ? agent.bg : `${agent.bg} opacity-60`,
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              "size-4",
-                              isActive
-                                ? agent.color
-                                : `${agent.color} opacity-50`,
-                            )}
-                          />
-                        </div>
-                        {/* Unread dot */}
-                        {hasUnresolved && (
-                          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-amber-400/90" />
-                        )}
-                      </div>
-
-                      {isSidebarOpen ? (
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="truncate text-sm font-medium">
-                              {agent.label}
-                            </p>
-                          </div>
-                          <p className="truncate text-xs text-white/32">
-                            {subtitle}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {/* Keyboard shortcut hint */}
-                      {isSidebarOpen && (
-                        <span className="ml-auto shrink-0 rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/20 font-mono opacity-0 transition group-hover:opacity-100">
-                          ⌘{shortcutKey}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </nav>
+            <AgentThreadSidebar
+              activeAgent={activeAgent}
+              setActiveAgent={setActiveAgent}
+              activeThreadId={activeThreadId}
+              setActiveThreadId={setActiveThreadId}
+              threads={threads ?? []}
+              agentSummaryMap={agentSummaryMap}
+              isSidebarOpen={isSidebarOpen}
+              expandedAgent={expandedAgent}
+              setExpandedAgent={setExpandedAgent}
+              onCreateThread={handleCreateThread}
+              onRenameThread={handleRenameThread}
+              onDeleteThread={handleDeleteThread}
+            />
 
             {/* Divider between agents and documents */}
             {isSidebarOpen && (
@@ -1248,23 +1268,6 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
-
-          {/* ⌘K Search trigger */}
-          {isSidebarOpen && (
-            <div className="px-3 py-2">
-              <button
-                type="button"
-                onClick={handleOpenSearch}
-                className="flex w-full items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/30 transition hover:border-white/10 hover:bg-white/[0.04] hover:text-white/50 cursor-pointer"
-              >
-                <MagnifyingGlass className="size-3.5" />
-                <span className="flex-1 text-left">Search conversations…</span>
-                <kbd className="flex items-center gap-0.5 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-white/25">
-                  <Command className="size-2.5" />K
-                </kbd>
-              </button>
-            </div>
-          )}
 
           <div className="border-t border-white/8 px-3 py-3 relative">
             <button
@@ -1676,7 +1679,7 @@ export default function ProjectPage() {
                   </div>
                 </div>
 
-                <div className="relative pb-4 pt-3">
+                <div className="relative pb-4 pt-3 w-[90%] mx-auto">
                   <div
                     className={cn(
                       "border border-white/8 bg-[#1b1b1b] px-3 shadow-[0_-1px_0_rgba(255,255,255,0.02)_inset] transition-all",

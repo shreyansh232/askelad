@@ -81,6 +81,15 @@ export interface AgentSummaryResponse {
   agents: AgentSummaryItem[];
 }
 
+export interface AgentThread {
+  id: string;
+  project_id: string;
+  agent_type: AgentType;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AgentStreamEvent {
   event: string;
   data: Record<string, unknown>;
@@ -88,13 +97,52 @@ export interface AgentStreamEvent {
 
 // ─── API Calls ───────────────────────────────────────────────────────────────
 
-export async function createAgentMessage(
+export async function listAgentThreads(
+  projectId: string,
+  agentType?: AgentType
+): Promise<AgentThread[]> {
+  const query = agentType ? `?agent_type=${agentType}` : '';
+  return apiFetch<AgentThread[]>(`/projects/${projectId}/threads${query}`);
+}
+
+export async function createAgentThread(
   projectId: string,
   agentType: AgentType,
+  title?: string
+): Promise<AgentThread> {
+  return apiFetch<AgentThread>(`/projects/${projectId}/threads`, {
+    method: 'POST',
+    body: JSON.stringify({ agent_type: agentType, title }),
+  });
+}
+
+export async function renameAgentThread(
+  projectId: string,
+  threadId: string,
+  title: string
+): Promise<AgentThread> {
+  return apiFetch<AgentThread>(`/projects/${projectId}/threads/${threadId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deleteAgentThread(
+  projectId: string,
+  threadId: string
+): Promise<void> {
+  return apiFetch<void>(`/projects/${projectId}/threads/${threadId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function createAgentMessage(
+  projectId: string,
+  threadId: string,
   content: string,
   attachmentIds: string[] = []
 ): Promise<AgentMessageCreateResponse> {
-  return apiFetch<AgentMessageCreateResponse>(`/projects/${projectId}/agents/${agentType}/messages`, {
+  return apiFetch<AgentMessageCreateResponse>(`/projects/${projectId}/threads/${threadId}/messages`, {
     method: 'POST',
     body: JSON.stringify({ content, attachment_ids: attachmentIds }),
   });
@@ -102,9 +150,9 @@ export async function createAgentMessage(
 
 export async function listAgentMessages(
   projectId: string,
-  agentType: AgentType
+  threadId: string
 ): Promise<AgentHistoryResponse> {
-  return apiFetch<AgentHistoryResponse>(`/projects/${projectId}/agents/${agentType}/messages`);
+  return apiFetch<AgentHistoryResponse>(`/projects/${projectId}/threads/${threadId}/messages`);
 }
 
 export async function getAgentSummary(projectId: string): Promise<AgentSummaryResponse> {
@@ -142,13 +190,13 @@ export async function resolveClarification(
  */
 export async function streamAgentRun(
   projectId: string,
-  agentType: AgentType,
+  threadId: string,
   runId: string,
   onEvent: (event: string, data: AgentStreamEvent['data']) => void,
   onAbort?: (controller: AbortController) => void
 ): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-  const url = `${baseUrl}/projects/${projectId}/agents/${agentType}/stream?run_id=${runId}`;
+  const url = `${baseUrl}/projects/${projectId}/threads/${threadId}/stream?run_id=${runId}`;
 
   const controller = new AbortController();
   if (onAbort) onAbort(controller);

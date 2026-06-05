@@ -189,6 +189,26 @@ class DocumentService:
 
         safe_filename = _sanitize_filename(filename)
 
+        # Check if document already exists in DB
+        result = await db.execute(
+            select(Document).where(
+                Document.project_id == project_id,
+                Document.filename == safe_filename,
+            )
+        )
+        existing_doc = result.scalar_one_or_none()
+
+        # Delete existing vector from Pinecone if it exists
+        if existing_doc and self.pinecone and existing_doc.vector_id:
+            try:
+                index = self.pinecone.Index(settings.pinecone_index_name)
+                index.delete(ids=[existing_doc.vector_id], namespace=project_id)
+            except Exception:
+                logger.exception(
+                    "Failed deleting existing document vector %s from Pinecone",
+                    existing_doc.id,
+                )
+
         # Re-detect content type after sanitization (extension may have changed)
         ext = safe_filename.lower().rsplit(".", 1)[-1] if "." in safe_filename else ""
 
@@ -218,10 +238,11 @@ class DocumentService:
             project_id,
         )
         # Note: supabase-py's storage upload is synchronous
+        # Use upsert: "true" to overwrite the existing file and avoid 409 conflicts
         self.supabase.storage.from_(settings.supabase_bucket).upload(
             path=path,
             file=file_content,
-            file_options={"content-type": content_type},
+            file_options={"content-type": content_type, "upsert": "true"},
         )
 
         storage_url = self.supabase.storage.from_(
@@ -284,16 +305,22 @@ class DocumentService:
                 len(text.strip()),
             )
 
-        new_doc = Document(
-            project_id=project_id,
-            filename=safe_filename,  # Store sanitized filename to match storage
-            file_type=content_type,
-            storage_url=storage_url,
-            excerpt=excerpt,
-            vector_id=vector_id,
-        )
-        db.add(new_doc)
-        return new_doc
+        if existing_doc:
+            existing_doc.file_type = content_type
+            existing_doc.excerpt = excerpt
+            existing_doc.vector_id = vector_id
+            return existing_doc
+        else:
+            new_doc = Document(
+                project_id=project_id,
+                filename=safe_filename,  # Store sanitized filename to match storage
+                file_type=content_type,
+                storage_url=storage_url,
+                excerpt=excerpt,
+                vector_id=vector_id,
+            )
+            db.add(new_doc)
+            return new_doc
 
 
 document_service = DocumentService()

@@ -26,7 +26,7 @@ class ToolCall:
 @dataclass
 class ChatMessage:
     role: str = "assistant"
-    content: str | None = None
+    content: str | list[dict[str, Any]] | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
 
     def model_dump(self) -> dict[str, Any]:

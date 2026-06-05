@@ -40,6 +40,9 @@ from app.schemas.agents import (
     AgentRunResponse,
     AgentSummaryResponse,
     AgentType,
+    AgentThreadResponse,
+    AgentThreadCreate,
+    AgentThreadUpdate,
     ClarificationRequestResponse,
     ClarificationResolutionRequest,
     ClarificationResolutionResponse,
@@ -108,8 +111,67 @@ async def _get_owned_project(
     return project
 
 
+@router.get("/threads", response_model=list[AgentThreadResponse])
+async def list_agent_threads(
+    project_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    agent_type: AgentType | None = None,
+) -> list[AgentThreadResponse]:
+    """List all conversation threads for a project, optionally filtered by agent type."""
+    await _get_owned_project(db, current_user, project_id)
+    threads = await agent_service.list_threads(db, project_id, agent_type)
+    return [AgentThreadResponse.model_validate(t) for t in threads]
+
+
+@router.post("/threads", response_model=AgentThreadResponse, status_code=201)
+async def create_agent_thread(
+    project_id: str,
+    body: AgentThreadCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AgentThreadResponse:
+    """Create a new conversation thread for a specific agent."""
+    await _get_owned_project(db, current_user, project_id)
+    thread = await agent_service.create_thread(
+        db, project_id, body.agent_type, body.title
+    )
+    return AgentThreadResponse.model_validate(thread)
+
+
+@router.patch("/threads/{thread_id}", response_model=AgentThreadResponse)
+async def rename_agent_thread(
+    project_id: str,
+    thread_id: str,
+    body: AgentThreadUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AgentThreadResponse:
+    """Rename an existing conversation thread."""
+    await _get_owned_project(db, current_user, project_id)
+    thread = await agent_service.rename_thread(db, project_id, thread_id, body.title)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return AgentThreadResponse.model_validate(thread)
+
+
+@router.delete("/threads/{thread_id}", status_code=204)
+async def delete_agent_thread(
+    project_id: str,
+    thread_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a conversation thread."""
+    await _get_owned_project(db, current_user, project_id)
+    success = await agent_service.delete_thread(db, project_id, thread_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return None
+
+
 @router.post(
-    "/agents/{agent_type}/messages",
+    "/threads/{thread_id}/messages",
     response_model=AgentMessageCreateResponse,
     status_code=201,
 )
@@ -117,35 +179,35 @@ async def _get_owned_project(
 async def create_agent_message(
     request: Request,
     project_id: str,
-    agent_type: AgentType,
+    thread_id: str,
     body: AgentMessageCreate,
     db: DbSession,
     current_user: CurrentUser,
 ) -> AgentMessageCreateResponse:
     """
-    Send a message to an agent and start a new run.
-
-    What happens:
-    1. Validate project ownership
-    2. Enforce plan-based per-agent prompt limit
-    3. Create run + user message in database
-    4. Return immediately with run ID (LLM runs asynchronously via streaming)
-
-    The actual LLM processing happens when client calls /stream endpoint.
-
-    URL: POST /projects/{project_id}/agents/{agent_type}/messages
-    Body: {"content": "What should I price my product?"}
-    Returns: {run_id, user_message_id} - client uses run_id to stream response
+    Send a message to an agent inside a specific thread and start a new run.
     """
     # Security: check user owns this project
     project = await _get_owned_project(db, current_user, project_id)
+
+    # Fetch thread to check ownership and get agent type for limit checks
+    result = await db.execute(
+        select(AgentThread).where(
+            AgentThread.id == thread_id,
+            AgentThread.project_id == project.id,
+        )
+    )
+    thread = result.scalar_one_or_none()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    agent_type = thread.agent_type
 
     # ── Plan-limit enforcement ───────────────────────────────────────────────
     user_plan = current_user.user_type.value  # 'free' | 'premium' | 'admin'
     limit = _PLAN_LIMITS.get(user_plan, _settings.plan_limit_free)
 
     if limit != -1:
-        # Count user messages sent in THIS project's thread for this agent type
+        # Count user messages sent in THIS project for this agent type
         stmt = (
             select(func.count())
             .select_from(AgentMessage)
@@ -172,13 +234,16 @@ async def create_agent_message(
     # ── End plan-limit enforcement ───────────────────────────────────────────
 
     # Delegate to service - creates run + message in DB
-    run, user_message = await agent_service.create_message_run(
-        db=db,
-        project=project,
-        agent_type=agent_type,
-        content=body.content,
-        attachment_ids=body.attachment_ids,
-    )
+    try:
+        run, user_message = await agent_service.create_message_run(
+            db=db,
+            project=project,
+            thread_id=thread_id,
+            content=body.content,
+            attachment_ids=body.attachment_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
     # Return created objects as response (Pydantic handles serialization)
     return AgentMessageCreateResponse(
@@ -199,29 +264,29 @@ async def _load_message_attachments(
     return list(result.scalars().all())
 
 
-@router.get("/agents/{agent_type}/messages", response_model=AgentHistoryResponse)
+@router.get("/threads/{thread_id}/messages", response_model=AgentHistoryResponse)
 async def list_agent_messages(
     project_id: str,
-    agent_type: AgentType,
+    thread_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ) -> AgentHistoryResponse:
     """
-    Get chat history for an agent in a project.
-
-    Returns:
-    - thread_id: The conversation ID
-    - messages: All messages (user + assistant) in chronological order
-    - clarifications: Any questions the agent asked that need answers
-
-    Used when user opens an existing conversation to load past messages.
+    Get chat history for a thread in a project.
     """
     # Security check
     await _get_owned_project(db, current_user, project_id)
 
     # Get messages and clarifications
-    thread_id, messages = await agent_service.list_messages(db, project_id, agent_type)
-    clarifications = await agent_service.list_clarifications(db, project_id, agent_type)
+    try:
+        thread_id, messages = await agent_service.list_messages(
+            db, project_id, thread_id
+        )
+        clarifications = await agent_service.list_clarifications(
+            db, project_id, thread_id=thread_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
     # Load attachments for each message
     message_responses = []
@@ -241,8 +306,14 @@ async def list_agent_messages(
             )
         )
 
+    # Get agent type from thread
+    result = await db.execute(
+        select(AgentThread.agent_type).where(AgentThread.id == thread_id)
+    )
+    agent_type = result.scalar_one()
+
     return AgentHistoryResponse(
-        thread_id=thread_id or "",
+        thread_id=thread_id,
         agent_type=agent_type,
         messages=message_responses,
         clarifications=[
@@ -252,42 +323,34 @@ async def list_agent_messages(
     )
 
 
-@router.get("/agents/{agent_type}/stream")
+@router.get("/threads/{thread_id}/stream")
 @limiter.limit("30/minute")  # Rate limit: 30 streams per minute per IP
 async def stream_agent_run(
     request: Request,
     project_id: str,
-    agent_type: AgentType,
+    thread_id: str,
     run_id: Annotated[str, Query(min_length=1)],  # Required query param
     db: DbSession,
     current_user: CurrentUser,
 ) -> StreamingResponse:
     """
     Stream the execution of an agent run in real-time.
-
-    This endpoint:
-    1. Checks if run exists and user owns the project
-    2. If already completed → replays saved response (no LLM call)
-    3. If pending → executes LLM call and streams events
-
-    Uses Server-Sent Events (SSE) for real-time streaming.
-    Client connects, server pushes events as they happen.
-
-    URL: GET /projects/{project_id}/agents/{agent_type}/stream?run_id=xxx
-    Events: run.started, message.delta, run.completed, etc.
     """
     project = await _get_owned_project(db, current_user, project_id)
 
+    # Load thread to check ownership and get agent type
+    result = await db.execute(
+        select(AgentThread).where(
+            AgentThread.id == thread_id,
+            AgentThread.project_id == project.id,
+        )
+    )
+    thread = result.scalar_one_or_none()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    agent_type = thread.agent_type
+
     async def event_stream() -> AsyncIterator[str]:
-        """
-        Generator that yields SSE events as they come from the service.
-
-        Wraps each event with _encode_sse() to format as:
-        event: <name>
-        data: <json>
-
-        Errors are caught and yielded as run.failed events.
-        """
         try:
             # Iterate over events from agent_service.stream_run()
             async for item in agent_service.stream_run(db, project, agent_type, run_id):

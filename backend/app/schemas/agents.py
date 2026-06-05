@@ -128,3 +128,23 @@ class LLMStructuredResponse(BaseModel):
     citations: list[str] = Field(default_factory=list)
     task_actions: list[LLMTaskAction] = Field(default_factory=list)
     artifacts: list[LLMArtifactAction] = Field(default_factory=list)
+
+
+class AgentThreadResponse(BaseModel):
+    id: str
+    project_id: str
+    agent_type: AgentType
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AgentThreadCreate(BaseModel):
+    agent_type: AgentType
+    title: str | None = Field(default=None, max_length=255)
+
+
+class AgentThreadUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)

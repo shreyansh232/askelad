@@ -6,6 +6,7 @@ from app.api.deps import get_current_user, get_db
 from app.db.models import (
     AgentMessage,
     AgentRun,
+    AgentThread,
     ClarificationRequest,
     Document,
     Project,
@@ -16,7 +17,34 @@ from app.main import app
 
 
 def _override_db():
-    yield object()
+    class MockDb:
+        def __init__(self):
+            self.calls = 0
+
+        async def execute(self, *args, **kwargs):
+            self.calls += 1
+
+            class MockResult:
+                def __init__(self, calls):
+                    self.calls = calls
+
+                def scalar_one_or_none(self):
+                    return AgentThread(
+                        id="thread-1", project_id="project-1", agent_type="cofounder"
+                    )
+
+                def scalar_one(self):
+                    if self.calls == 1:
+                        return AgentThread(
+                            id="thread-1",
+                            project_id="project-1",
+                            agent_type="cofounder",
+                        )
+                    return 0
+
+            return MockResult(self.calls)
+
+    yield MockDb()
 
 
 async def _override_current_user():
@@ -39,8 +67,9 @@ def test_app_registers_documents_and_agent_routes():
     routes = {getattr(route, "path") for route in app.routes if hasattr(route, "path")}
 
     assert "/api/projects/{project_id}/documents" in routes
-    assert "/api/projects/{project_id}/agents/{agent_type}/messages" in routes
-    assert "/api/projects/{project_id}/agents/{agent_type}/stream" in routes
+    assert "/api/projects/{project_id}/threads" in routes
+    assert "/api/projects/{project_id}/threads/{thread_id}/messages" in routes
+    assert "/api/projects/{project_id}/threads/{thread_id}/stream" in routes
     assert "/api/projects/{project_id}/clarifications" in routes
     assert "/api/settings" in routes
     assert "/api/settings/provider-keys/{provider}/test" in routes
@@ -89,9 +118,9 @@ def test_create_agent_message_returns_pending_run(monkeypatch):
         return project
 
     async def fake_create_message_run(
-        db, project, agent_type, content, attachment_ids=None
+        db, project, thread_id, content, attachment_ids=None
     ):
-        assert agent_type == "cofounder"
+        assert thread_id == "thread-1"
         assert content == "Help me prioritize GTM."
         assert attachment_ids == []
         return run, message
@@ -104,7 +133,7 @@ def test_create_agent_message_returns_pending_run(monkeypatch):
     )
 
     response = client.post(
-        "/api/projects/project-1/agents/cofounder/messages",
+        "/api/projects/project-1/threads/thread-1/messages",
         json={"content": "Help me prioritize GTM."},
     )
 
@@ -144,7 +173,7 @@ def test_stream_agent_run_emits_sse_events(monkeypatch):
 
     with client.stream(
         "GET",
-        "/api/projects/project-1/agents/cofounder/stream?run_id=run-1",
+        "/api/projects/project-1/threads/thread-1/stream?run_id=run-1",
     ) as response:
         body = "".join(
             chunk.decode() if isinstance(chunk, bytes) else chunk

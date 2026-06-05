@@ -356,29 +356,101 @@ class AgentService:
     - Clarifications (handling missing info)
     """
 
+    async def create_thread(
+        self,
+        db: AsyncSession,
+        project_id: str,
+        agent_type: AgentType,
+        title: str | None = None,
+    ) -> AgentThread:
+        """Create a new agent thread."""
+        if not title:
+            title = "New Conversation"
+        thread = AgentThread(project_id=project_id, agent_type=agent_type, title=title)
+        db.add(thread)
+        await db.commit()
+        await db.refresh(thread)
+        return thread
+
+    async def rename_thread(
+        self,
+        db: AsyncSession,
+        project_id: str,
+        thread_id: str,
+        title: str,
+    ) -> AgentThread | None:
+        """Rename an existing thread."""
+        result = await db.execute(
+            select(AgentThread).where(
+                AgentThread.id == thread_id,
+                AgentThread.project_id == project_id,
+            )
+        )
+        thread = result.scalar_one_or_none()
+        if not thread:
+            return None
+        thread.title = title
+        await db.commit()
+        await db.refresh(thread)
+        return thread
+
+    async def delete_thread(
+        self,
+        db: AsyncSession,
+        project_id: str,
+        thread_id: str,
+    ) -> bool:
+        """Delete an existing thread."""
+        result = await db.execute(
+            select(AgentThread).where(
+                AgentThread.id == thread_id,
+                AgentThread.project_id == project_id,
+            )
+        )
+        thread = result.scalar_one_or_none()
+        if not thread:
+            return False
+        await db.delete(thread)
+        await db.commit()
+        return True
+
+    async def list_threads(
+        self,
+        db: AsyncSession,
+        project_id: str,
+        agent_type: AgentType | None = None,
+    ) -> list[AgentThread]:
+        """List all threads for a project, optionally filtered by agent type."""
+        statement = select(AgentThread).where(AgentThread.project_id == project_id)
+        if agent_type:
+            statement = statement.where(AgentThread.agent_type == agent_type)
+        statement = statement.order_by(AgentThread.updated_at.desc())
+        result = await db.execute(statement)
+        return list(result.scalars().all())
+
     async def create_message_run(
         self,
         db: AsyncSession,
         project: Project,
-        agent_type: AgentType,
+        thread_id: str,
         content: str,
         attachment_ids: list[str] | None = None,
     ) -> tuple[AgentRun, AgentMessage]:
         """
-        Create a new "run" for an agent when user sends a message.
-
-        What happens step by step:
-        1. Get existing thread OR create new one (thread = conversation with specific agent)
-        2. Close any open clarifications (user is asking something new, so old questions are superseded)
-        3. Create a new AgentRun (execution record)
-        4. Create a user message record
-        5. Return both so API can respond immediately
-
-        Why return tuple[AgentRun, AgentMessage]?
-        - API needs the run ID to stream response later
-        - API needs the message ID to show user message immediately
+        Create a new "run" for an agent inside a specific thread.
         """
-        thread = await self._get_or_create_thread(db, project.id, agent_type)
+        result = await db.execute(
+            select(AgentThread).where(
+                AgentThread.id == thread_id,
+                AgentThread.project_id == project.id,
+            )
+        )
+        thread = result.scalar_one_or_none()
+        if not thread:
+            raise ValueError("Thread not found")
+
+        agent_type = thread.agent_type
+
         # When user sends new message, any open clarifications become obsolete
         # (they're superseded by the new question)
         await self._resolve_open_clarifications(
@@ -392,29 +464,36 @@ class AgentService:
         )
 
         # Create the run record - this is the "execution" that will be streamed
-        # Status starts as 'pending', will become 'running' then 'completed'/'failed'
         run = AgentRun(
             thread_id=thread.id,
             project_id=project.id,
             agent_type=agent_type,
             status="pending",
-            model_name=runtime_settings.model,  # Track which LLM model was used
+            model_name=runtime_settings.model,
         )
         db.add(run)
-        await db.flush()  # Flush to get run.id without committing transaction
+        await db.flush()
 
         # Create the user message record - what the user said
         user_message = AgentMessage(
             thread_id=thread.id,
-            run_id=run.id,  # Link message to this specific run
+            run_id=run.id,
             role="user",
             content=content.strip(),
-            citations=[],  # User messages don't have citations initially
-            attachment_ids=attachment_ids or [],  # Store attachment document IDs
+            citations=[],
+            attachment_ids=attachment_ids or [],
         )
         db.add(user_message)
-        await db.commit()  # Commit both run and message to database
-        await db.refresh(run)  # Reload from DB to get generated IDs/timestamps
+
+        # Auto-name thread on first user message if it has a default title
+        if thread.title in ("New Conversation", "New Chat", "New Thread"):
+            title_text = content.strip().split("\n")[0][:40]
+            if len(content.strip()) > 40:
+                title_text += "..."
+            thread.title = title_text or "Conversation"
+
+        await db.commit()
+        await db.refresh(run)
         await db.refresh(user_message)
         return run, user_message
 
@@ -422,22 +501,20 @@ class AgentService:
         self,
         db: AsyncSession,
         project_id: str,
-        agent_type: AgentType,
-    ) -> tuple[str | None, list[AgentMessage]]:
+        thread_id: str,
+    ) -> tuple[str, list[AgentMessage]]:
         """
         Fetch all messages in a conversation thread.
-
-        Used for:
-        - Loading chat history when user opens a conversation
-        - Displaying past messages in UI
-
-        Returns:
-        - thread_id: The conversation ID (None if no conversation exists yet)
-        - messages: List of all messages in chronological order
         """
-        thread = await self._get_thread(db, project_id, agent_type)
+        result = await db.execute(
+            select(AgentThread).where(
+                AgentThread.id == thread_id,
+                AgentThread.project_id == project_id,
+            )
+        )
+        thread = result.scalar_one_or_none()
         if not thread:
-            return None, []  # No conversation started yet
+            raise ValueError("Thread not found")
 
         result = await db.execute(
             select(AgentMessage)
@@ -452,30 +529,19 @@ class AgentService:
         project_id: str,
         agent_type: AgentType | None = None,
         status_filter: str = "all",
+        thread_id: str | None = None,
     ) -> list[ClarificationRequest]:
-        """Return clarifications filtered by project, optionally by agent_type and status.
-
-        Clarifications are questions the agent asked the user (e.g., "What's your monthly revenue?")
-        These need to be answered before the agent can give useful advice.
-
-        Args:
-            project_id: Which project to look up
-            agent_type: Optional filter - only clarifications from specific agent (finance, marketing, etc.)
-            status_filter:
-                - 'open' = questions not yet answered (default)
-                - 'resolved' = questions that were answered
-                - 'all' = both open and resolved
-        """
+        """Return clarifications filtered by project, optionally by agent_type/thread_id and status."""
         statement: Select[tuple[ClarificationRequest]] = select(
             ClarificationRequest
         ).where(ClarificationRequest.project_id == project_id)
-        if agent_type:
+        if thread_id:
+            statement = statement.where(ClarificationRequest.thread_id == thread_id)
+        elif agent_type:
             statement = statement.where(ClarificationRequest.agent_type == agent_type)
         if status_filter == "open":
-            # resolved_at is NULL means not answered yet
             statement = statement.where(ClarificationRequest.resolved_at.is_(None))
         elif status_filter == "resolved":
-            # resolved_at has a value means it was answered
             statement = statement.where(ClarificationRequest.resolved_at.isnot(None))
 
         result = await db.execute(
@@ -807,9 +873,55 @@ class AgentService:
             conversation_context,
         )
 
+        # Retrieve and process user message attachments (specifically images for vision models)
+        image_attachments = []
+        if user_message.attachment_ids:
+            att_result = await db.execute(
+                select(Document).where(
+                    Document.id.in_(user_message.attachment_ids),
+                    Document.project_id == project.id,
+                )
+            )
+            attachments = att_result.scalars().all()
+            for doc in attachments:
+                if doc.file_type and doc.file_type.startswith("image/"):
+                    try:
+                        if document_service.supabase:
+                            import base64
+
+                            path = f"{doc.project_id}/{doc.filename}"
+                            loop = asyncio.get_event_loop()
+                            file_bytes = await loop.run_in_executor(
+                                None,
+                                lambda: document_service.supabase.storage.from_(
+                                    settings.supabase_bucket
+                                ).download(path),
+                            )
+                            b64_str = base64.b64encode(file_bytes).decode("utf-8")
+                            image_url = f"data:{doc.file_type};base64,{b64_str}"
+                        else:
+                            image_url = doc.storage_url
+                        image_attachments.append(image_url)
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to download image {doc.filename} for vision context: {e}"
+                        )
+                        image_attachments.append(doc.storage_url)
+
+        user_content: str | list[dict[str, Any]] = prompt
+        if image_attachments:
+            user_content = [{"type": "text", "text": prompt}]
+            for img_url in image_attachments:
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": img_url},
+                    }
+                )
+
         messages = [
             {"role": "system", "content": agent_def.system_prompt},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": user_content},
         ]
 
         # Tool calling loop
@@ -1109,16 +1221,15 @@ class AgentService:
         sections: list[str] = []
 
         for agent_type in other_agents:
-            # Find the thread for this agent in this project (may not exist yet).
-            thread = await self._get_thread(db, project_id, agent_type)
-            if not thread:
-                continue  # Agent hasn't been used yet — skip silently.
-
-            # Fetch the most recent `limit * 2` messages (user + assistant pairs).
-            # We order desc to get the latest, then reverse for chronological display.
+            # Fetch the most recent `limit * 2` messages (user + assistant pairs)
+            # across all threads for this agent.
             result = await db.execute(
                 select(AgentMessage)
-                .where(AgentMessage.thread_id == thread.id)
+                .join(AgentThread, AgentMessage.thread_id == AgentThread.id)
+                .where(
+                    AgentThread.project_id == project_id,
+                    AgentThread.agent_type == agent_type,
+                )
                 .order_by(AgentMessage.created_at.desc())
                 .limit(limit * 2)  # Grab pairs (user + assistant per exchange)
             )
@@ -1449,16 +1560,16 @@ class AgentService:
         agent_type: AgentType,
     ) -> AgentThread | None:
         """
-        Find a thread by project and agent type.
-
-        Used to check if conversation already exists.
-        Returns None if this is the first message.
+        Find the latest active thread by project and agent type.
         """
         result = await db.execute(
-            select(AgentThread).where(
+            select(AgentThread)
+            .where(
                 AgentThread.project_id == project_id,
                 AgentThread.agent_type == agent_type,
             )
+            .order_by(AgentThread.updated_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
